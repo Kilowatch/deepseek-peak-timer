@@ -1,8 +1,8 @@
 # 🕒 DeepSeek Peak / Off-Peak Price Timer
 
-> A sleek, always-on-top floating desktop widget and status bar for Windows that tracks **DeepSeek API 50% off-peak discount hours** in real time.
+> A sleek, always-on-top floating desktop widget and status bar for Windows and KDE/Linux that tracks **DeepSeek API 50% off-peak discount hours** in real time.
 
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d7.svg)](https://microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d7.svg)](https://www.electronjs.org/)
 [![Electron](https://img.shields.io/badge/Electron-34.x-47848F.svg)](https://electronjs.org)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://github.com/Kilowatch/deepseek-peak-timer?tab=readme-ov-file#GPL-3.0-1-ov-file)
 [![GitHub release](https://img.shields.io/github/v/release/Kilowatch/deepseek-peak-timer?include_prereleases&color=emerald)](https://github.com/Kilowatch/deepseek-peak-timer/releases)
@@ -95,6 +95,25 @@ To package your own portable `.exe` into the `Standalone/` directory:
 ```bash
 npm run build:standalone
 ```
+
+### KDE/Linux (AppImage)
+
+Run from source on KDE Plasma or another Linux desktop:
+
+```bash
+npm install
+npm start
+```
+
+Build a portable AppImage:
+
+```bash
+npm run build:linux
+chmod +x Standalone/DeepSeekPriceClock-*.AppImage
+./Standalone/DeepSeekPriceClock-*.AppImage
+```
+
+`npm run build:linux:deb` and `npm run build:linux:rpm` produce optional native packages. Linux packages include a freedesktop `.desktop` launcher for KDE application-menu integration. On Wayland, KDE controls window placement because Wayland does not permit applications to set global screen coordinates. Enable **Start Automatically on Login** from the tray or window context menu to create a user-level XDG/KDE autostart entry.
 
 ---
 

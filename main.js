@@ -9,6 +9,10 @@ let currentMode = 'bar'; // 'expanded' | 'bar' | 'tray'
 let isQuitting = false;
 let isPeakNow = false;
 
+const isLinux = process.platform === 'linux';
+const isWayland = isLinux && process.env.XDG_SESSION_TYPE === 'wayland';
+const appIconPath = path.join(__dirname, 'src', 'assets', 'icons', 'icon.png');
+
 const SIZES = {
   expanded: { width: 360, height: 590, minWidth: 320, minHeight: 480 },
   bar: { width: 230, height: 60, minWidth: 200, minHeight: 60 }
@@ -28,7 +32,8 @@ function loadConfig() {
     mode: 'bar',
     pinned: true,
     zone: 'local',
-    lastBounds: null
+    lastBounds: null,
+    autostart: false
   };
 }
 
@@ -46,13 +51,67 @@ function getTrayIcon(isPeak) {
   const icoPath = path.join(__dirname, 'src', 'assets', 'icons', icoName);
   const pngPath = path.join(__dirname, 'src', 'assets', 'icons', pngName);
   
-  if (fs.existsSync(icoPath)) {
-    return nativeImage.createFromPath(icoPath);
-  }
-  if (fs.existsSync(pngPath)) {
+  // KDE and other Linux desktops handle PNG tray images more consistently than
+  // Windows ICO files, especially on high-DPI panels.
+  if (isLinux && fs.existsSync(pngPath)) {
     return nativeImage.createFromPath(pngPath);
   }
+  if (fs.existsSync(icoPath)) return nativeImage.createFromPath(icoPath);
+  if (fs.existsSync(pngPath)) return nativeImage.createFromPath(pngPath);
   return nativeImage.createEmpty();
+}
+
+function applyAlwaysOnTop(window, enabled) {
+  if (!window) return;
+  if (isLinux) {
+    window.setAlwaysOnTop(enabled);
+  } else {
+    window.setAlwaysOnTop(enabled, 'screen-saver');
+  }
+}
+
+function getAutostartPath() {
+  const configHome = process.env.XDG_CONFIG_HOME || path.join(app.getPath('home'), '.config');
+  return path.join(configHome, 'autostart', 'za.kilowatch.deepseekpriceclock.desktop');
+}
+
+function quoteDesktopArgument(value) {
+  return `"${String(value).replace(/([\\"`$])/g, '\\$1')}"`;
+}
+
+function setLinuxAutostart(enabled) {
+  if (!isLinux) return;
+
+  const autostartPath = getAutostartPath();
+  try {
+    if (!enabled) {
+      if (fs.existsSync(autostartPath)) fs.unlinkSync(autostartPath);
+      return;
+    }
+
+    fs.mkdirSync(path.dirname(autostartPath), { recursive: true });
+    // APPIMAGE is the stable path to a portable AppImage. process.execPath
+    // points into its temporary mount, which disappears after the app exits.
+    const executable = process.env.APPIMAGE || process.execPath;
+    const command = [quoteDesktopArgument(executable)];
+    if (!app.isPackaged) command.push(quoteDesktopArgument(app.getAppPath()));
+    const desktopEntry = [
+      '[Desktop Entry]',
+      'Type=Application',
+      'Version=1.0',
+      'Name=DeepSeek Price Clock',
+      'Comment=DeepSeek API peak/off-peak price timer',
+      `Exec=${command.join(' ')}`,
+      `Icon=${appIconPath}`,
+      'Terminal=false',
+      'X-GNOME-Autostart-enabled=true',
+      'X-KDE-autostart-after=panel',
+      ''
+    ].join('\n');
+    fs.writeFileSync(autostartPath, desktopEntry, 'utf8');
+  } catch (error) {
+    console.error('Could not update Linux autostart entry:', error);
+  }
 }
 
 function createWindow() {
@@ -73,33 +132,41 @@ function createWindow() {
     y = Math.max(workArea.y, Math.min(config.lastBounds.y, workArea.y + workArea.height - size.height));
   }
 
-  mainWindow = new BrowserWindow({
+  const windowOptions = {
     width: size.width,
     height: size.height,
-    x: x,
-    y: y,
     frame: false,
     transparent: true,
     alwaysOnTop: isPinned,
     skipTaskbar: false,
     resizable: true,
     hasShadow: true,
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       backgroundThrottling: false
     }
-  });
+  };
+
+  // Wayland compositors own global placement. Supplying coordinates or moving
+  // the window later is unsupported, so let KDE choose its initial position.
+  if (!isWayland) {
+    windowOptions.x = x;
+    windowOptions.y = y;
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
   if (isPinned) {
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    applyAlwaysOnTop(mainWindow, true);
   }
 
   mainWindow.on('moved', () => {
-    if (mainWindow && mainWindow.isVisible() && currentMode === 'expanded') {
+    if (!isWayland && mainWindow && mainWindow.isVisible() && currentMode === 'expanded') {
       const bounds = mainWindow.getBounds();
       saveConfig({ lastBounds: { x: bounds.x, y: bounds.y } });
     }
@@ -147,12 +214,21 @@ function updateTrayMenu() {
       click: (item) => {
         isPinned = item.checked;
         if (mainWindow) {
-          mainWindow.setAlwaysOnTop(isPinned, 'screen-saver');
+          applyAlwaysOnTop(mainWindow, isPinned);
           mainWindow.webContents.send('state-changed', { pinned: isPinned });
         }
         saveConfig({ pinned: isPinned });
       }
     },
+    ...(isLinux ? [{
+      label: 'Start Automatically on Login',
+      type: 'checkbox',
+      checked: loadConfig().autostart === true,
+      click: (item) => {
+        setLinuxAutostart(item.checked);
+        saveConfig({ autostart: item.checked });
+      }
+    }] : []),
     { type: 'separator' },
     {
       label: 'Exit (Close Completely)',
@@ -221,8 +297,10 @@ function setWindowMode(mode) {
   }
 
   mainWindow.setMinimumSize(targetSize.minWidth, targetSize.minHeight);
-  mainWindow.setSize(targetSize.width, targetSize.height, true);
-  mainWindow.setPosition(newX, newY, true);
+  mainWindow.setSize(targetSize.width, targetSize.height);
+  if (!isWayland) {
+    mainWindow.setPosition(newX, newY);
+  }
 
   if (!mainWindow.isVisible()) {
     mainWindow.show();
@@ -260,12 +338,21 @@ ipcMain.on('show-context-menu', () => {
       click: (item) => {
         isPinned = item.checked;
         if (mainWindow) {
-          mainWindow.setAlwaysOnTop(isPinned, 'screen-saver');
+          applyAlwaysOnTop(mainWindow, isPinned);
           mainWindow.webContents.send('state-changed', { pinned: isPinned });
         }
         saveConfig({ pinned: isPinned });
       }
     },
+    ...(isLinux ? [{
+      label: 'Start Automatically on Login',
+      type: 'checkbox',
+      checked: loadConfig().autostart === true,
+      click: (item) => {
+        setLinuxAutostart(item.checked);
+        saveConfig({ autostart: item.checked });
+      }
+    }] : []),
     { type: 'separator' },
     {
       label: 'Exit DeepSeek Clock',
@@ -293,7 +380,7 @@ ipcMain.on('set-mode', (event, mode) => {
 ipcMain.on('toggle-pin', (event) => {
   isPinned = !isPinned;
   if (mainWindow) {
-    mainWindow.setAlwaysOnTop(isPinned, 'screen-saver');
+    applyAlwaysOnTop(mainWindow, isPinned);
   }
   saveConfig({ pinned: isPinned });
   event.reply('state-changed', { pinned: isPinned });
