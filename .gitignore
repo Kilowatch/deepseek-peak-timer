@@ -4,7 +4,6 @@ node_modules/
 # Production & Standalone Builds
 dist/
 build/
-Standalone/
 out/
 
 # Logs
