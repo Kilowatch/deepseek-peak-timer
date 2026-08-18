@@ -66,7 +66,7 @@ DeepSeek API discounts apply during fixed UTC hours:
 ## 🚀 Getting Started
 
 ### Method 1: Standalone Single-File Executable (Recommended)
-1. Download **[`DeepSeekPriceClock.exe`](https://github.com/Kilowatch/deepseek-peak-timer/raw/main/Standalone/DeepSeekPriceClock.exe)** or open the [`Standalone/`](Standalone/) folder.
+1. Download **[`DeepSeekPriceClock.exe`](https://github.com/Kilowatch/deepseek-peak-timer/blob/main/Standalone/DeepSeekPriceClock.exe)** or open the [`Standalone/`](Standalone/) folder.
 2. Double-click **`DeepSeekPriceClock.exe`**.
 3. *(Optional)* Move it to your Desktop, startup folder, or USB drive.
 
