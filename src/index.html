@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek Price Clock</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body data-mode="bar">
+
+  <!-- 1. FLOATING MINI BAR (WITH HEADER & COUNTDOWN) -->
+  <div id="view-bar" class="view-container active drag-region" title="DeepSeek Peak Timer (Double-click or click [↗] to expand)">
+    <div class="bar-header">
+      <span class="bar-title">DeepSeek Peak Timer</span>
+      <button class="bar-expand-btn no-drag" id="btn-bar-expand" title="Expand to Full Dashboard">↗</button>
+    </div>
+    <div class="bar-body">
+      <div class="bar-left">
+        <span class="bar-dot dot-off" id="bar-dot"></span>
+        <span class="bar-timer" id="bar-timer">--:--:--</span>
+      </div>
+      <span class="bar-tag tag-off" id="bar-status">-50%</span>
+    </div>
+  </div>
+
+  <!-- 2. FULL EXPANDED DASHBOARD -->
+  <div id="view-expanded" class="view-container">
+    <!-- Header / Drag Bar -->
+    <div class="window-header drag-region">
+      <div class="brand-wrap">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span class="brand-title">DeepSeek Clock</span>
+      </div>
+      <div class="header-controls no-drag">
+        <button class="ctrl-btn active" id="btn-pin" title="Always on Top (Pinned)">📌</button>
+        <button class="ctrl-btn" id="btn-minimize-bar" title="Minimize to Floating Bar">—</button>
+        <button class="ctrl-btn" id="btn-minimize-tray" title="Minimize / Hide to System Tray">⌄</button>
+        <button class="ctrl-btn close" id="btn-close" title="Exit DeepSeek Clock">✕</button>
+      </div>
+    </div>
+
+    <!-- Scrollable Body -->
+    <div class="dashboard-content">
+      <!-- Hero Status Card -->
+      <div class="hero-card hero-off" id="hero-status">
+        <div class="badge-row">
+          <span class="status-dot dot-off" id="badge-dot"></span>
+          <span class="badge-text" id="badge-text">OFF-PEAK · 50% DISCOUNT</span>
+        </div>
+        <div class="timer-row">
+          <span class="count-timer" id="count-timer">--:--:--</span>
+          <span class="count-suffix">left</span>
+        </div>
+        <div class="next-prompt" id="next-prompt">→ Calculating switchover...</div>
+      </div>
+
+      <!-- 24-Hour Timeline Bar -->
+      <div class="timeline-section">
+        <div class="section-label">
+          <span>24-Hour Schedule</span>
+          <span id="tz-label">Local Time</span>
+        </div>
+        <div class="timeline-track-wrap">
+          <div class="timeline-track" id="timeline-track"></div>
+          <div class="timeline-needle" id="timeline-needle"></div>
+        </div>
+        <div class="timeline-ticks">
+          <span>00:00</span>
+          <span>06:00</span>
+          <span>12:00</span>
+          <span>18:00</span>
+          <span>24:00</span>
+        </div>
+      </div>
+
+      <!-- Upcoming Windows Table -->
+      <div class="windows-section">
+        <div class="section-label">Upcoming Price Windows</div>
+        <table class="windows-table">
+          <tbody id="windows-table-body">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Real-Time Model Pricing -->
+      <div class="rates-section">
+        <div class="section-label" id="rates-status-header">Paying Now · Off-Peak Rates</div>
+        <div class="rates-grid">
+          <!-- DeepSeek Flash -->
+          <div class="rate-box">
+            <div class="model-name">DeepSeek Flash</div>
+            <div class="rate-pair">
+              <div class="rate-col"><span>Input</span><span class="rate-val" data-off="$0.22" data-peak="$0.44">$0.22</span></div>
+              <div class="rate-col"><span>Output</span><span class="rate-val" data-off="$0.66" data-peak="$1.32">$0.66</span></div>
+            </div>
+          </div>
+          <!-- DeepSeek Pro -->
+          <div class="rate-box">
+            <div class="model-name">DeepSeek Pro</div>
+            <div class="rate-pair">
+              <div class="rate-col"><span>Input</span><span class="rate-val" data-off="$0.66" data-peak="$1.32">$0.66</span></div>
+              <div class="rate-col"><span>Output</span><span class="rate-val" data-off="$1.98" data-peak="$3.96">$1.98</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="rate-unit-note">Per 1M tokens.</div>
+      </div>
+    </div>
+
+    <!-- Footer Toolbar -->
+    <div class="footer-toolbar no-drag">
+      <span class="tz-info" id="tz-footer-info">Auto Timezone</span>
+      <div class="tz-toggle">
+        <button type="button" class="tz-btn active" data-zone="local">Local</button>
+        <button type="button" class="tz-btn" data-zone="utc">UTC</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/calculator.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

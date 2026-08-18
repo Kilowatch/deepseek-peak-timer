@@ -1,0 +1,12 @@
+{
+  "name": "deepseek-price-clock",
+  "version": "1.0.0",
+  "description": "Floating Windows desktop bar for DeepSeek peak/off-peak pricing clock",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^34.3.0"
+  }
+}
