@@ -13,9 +13,7 @@
 
 No installation or Node.js runtime required! Download and run directly:
 
-👉 **[⬇️ Download Latest `DeepSeekPriceClock.exe` (Standalone)](https://github.com/Kilowatch/deepseek-peak-timer/releases/latest)**
-
-*(Or grab the pre-built portable binary directly from the [`Standalone/`](https://github.com/Kilowatch/deepseek-peak-timer/tree/master/Standalone) directory in this repo).*
+👉 **[⬇️ Download `DeepSeekPriceClock.exe` (v1.0.0)](https://github.com/Kilowatch/deepseek-peak-timer/releases/download/v1.0.0/DeepSeekPriceClock.exe)**
 
 ---
 
@@ -66,8 +64,8 @@ DeepSeek API discounts apply during fixed UTC hours:
 ## 🚀 Getting Started
 
 ### Method 1: Standalone Single-File Executable (Recommended)
-1. Download **[`DeepSeekPriceClock.exe`](https://github.com/Kilowatch/deepseek-peak-timer/blob/main/Standalone/DeepSeekPriceClock.exe)** or open the [`Standalone/`](Standalone/) folder.
-2. Double-click **`DeepSeekPriceClock.exe`**.
+1. Download **[`DeepSeekPriceClock.exe`](https://github.com/Kilowatch/deepseek-peak-timer/releases/download/v1.0.0/DeepSeekPriceClock.exe)**.
+2. Double-click **`DeepSeekPriceClock.exe`** to run.
 3. *(Optional)* Move it to your Desktop, startup folder, or USB drive.
 
 ---
