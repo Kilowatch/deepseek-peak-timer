@@ -1,11 +1,21 @@
-# 🕒 DeepSeek Peak / Off-Peak Price Clock
+# 🕒 DeepSeek Peak / Off-Peak Price Timer
 
 > A sleek, always-on-top floating desktop widget and status bar for Windows that tracks **DeepSeek API 50% off-peak discount hours** in real time.
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d7.svg)](https://microsoft.com/windows)
 [![Electron](https://img.shields.io/badge/Electron-34.x-47848F.svg)](https://electronjs.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-active-success.svg)]()
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://github.com/Kilowatch/deepseek-peak-timer?tab=readme-ov-file#GPL-3.0-1-ov-file)
+[![GitHub release](https://img.shields.io/github/v/release/Kilowatch/deepseek-peak-timer?include_prereleases&color=emerald)](https://github.com/Kilowatch/deepseek-peak-timer/releases)
+
+---
+
+## ⚡ Direct Download (Standalone .exe)
+
+No installation or Node.js runtime required! Download and run directly:
+
+👉 **[⬇️ Download Latest `DeepSeekPriceClock.exe` (Standalone)](https://github.com/Kilowatch/deepseek-peak-timer/releases/latest)**
+
+*(Or grab the pre-built portable binary directly from the [`Standalone/`](https://github.com/Kilowatch/deepseek-peak-timer/tree/master/Standalone) directory in this repo).*
 
 ---
 
@@ -15,9 +25,9 @@
 | :---: | :---: |
 | ![Full Dashboard](docs/screenshots/full-dashboard.png) | ![Floating Mini Bar](docs/screenshots/mini-bar.png) |
 
-> 💡 **Where to add your screenshot images:**
-> - Full Dashboard: Save your screenshot as `docs/screenshots/full-dashboard.png`
-> - Floating Mini Bar: Save your screenshot as `docs/screenshots/mini-bar.png`
+> 💡 **Screenshot Placement:**
+> - Full Dashboard: Save image as `docs/screenshots/full-dashboard.png`
+> - Floating Mini Bar: Save image as `docs/screenshots/mini-bar.png`
 
 ---
 
@@ -59,18 +69,18 @@ DeepSeek API discounts apply during fixed UTC hours:
 
 ## 🚀 Getting Started
 
-### Method 1: Standalone Single-File Executable (No Node.js Required)
-1. Go to the `Standalone/` folder.
+### Method 1: Standalone Single-File Executable (Recommended)
+1. Download **[`DeepSeekPriceClock.exe`](https://github.com/Kilowatch/deepseek-peak-timer/releases/latest)** or open the [`Standalone/`](Standalone/) folder.
 2. Double-click **`DeepSeekPriceClock.exe`**.
-3. *(Optional)* Create a desktop shortcut or move the `.exe` wherever you prefer.
+3. *(Optional)* Move it to your Desktop, startup folder, or USB drive.
 
 ---
 
 ### Method 2: Run from Source
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/deepseek-price-clock.git
-   cd deepseek-price-clock
+   git clone https://github.com/Kilowatch/deepseek-peak-timer.git
+   cd deepseek-peak-timer
    ```
 
 2. **Install dependencies**:
@@ -111,7 +121,7 @@ npm run build:standalone
 ## 📁 Repository Structure
 
 ```
-deepseek-price-clock/
+deepseek-peak-timer/
 ├── Standalone/
 │   └── DeepSeekPriceClock.exe    # Standalone single-file portable executable
 ├── docs/
@@ -131,6 +141,7 @@ deepseek-price-clock/
 ├── preload.js                    # Secure context bridge IPC
 ├── package.json                  # Project manifest & build scripts
 ├── start.bat                     # Quick launcher batch file
+├── LICENSE                       # GNU General Public License v3.0
 └── README.md                     # Documentation
 ```
 
@@ -138,4 +149,4 @@ deepseek-price-clock/
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the **[GPL-3.0 License](https://github.com/Kilowatch/deepseek-peak-timer?tab=readme-ov-file#GPL-3.0-1-ov-file)** - see the [LICENSE](LICENSE) file for details.

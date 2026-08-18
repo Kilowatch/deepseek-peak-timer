@@ -1,5 +1,5 @@
 {
-  "name": "deepseek-price-clock",
+  "name": "deepseek-peak-timer",
   "version": "1.0.0",
   "description": "Floating Windows desktop bar for DeepSeek peak/off-peak pricing clock",
   "main": "main.js",
@@ -32,5 +32,11 @@
       "src/**/*",
       "package.json"
     ]
-  }
+  },
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kilowatch/deepseek-peak-timer.git"
+  },
+  "homepage": "https://github.com/Kilowatch/deepseek-peak-timer#readme"
 }
