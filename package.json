@@ -4,9 +4,33 @@
   "description": "Floating Windows desktop bar for DeepSeek peak/off-peak pricing clock",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:standalone": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron": "^34.3.0"
+    "electron": "^34.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "za.kilowatch.deepseekpriceclock",
+    "productName": "DeepSeekPriceClock",
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "src/assets/icons/app-icon.ico"
+    },
+    "portable": {
+      "artifactName": "DeepSeekPriceClock.exe"
+    },
+    "directories": {
+      "output": "Standalone"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "package.json"
+    ]
   }
 }
