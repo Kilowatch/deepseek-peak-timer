@@ -1,11 +1,16 @@
 {
   "name": "deepseek-peak-timer",
   "version": "1.0.0",
-  "description": "Floating Windows desktop bar for DeepSeek peak/off-peak pricing clock",
+  "description": "Floating desktop timer for DeepSeek peak/off-peak API pricing",
   "main": "main.js",
+  "desktopName": "za.kilowatch.deepseekpriceclock.desktop",
   "scripts": {
     "start": "electron .",
-    "build:standalone": "electron-builder --win portable"
+    "build:standalone": "electron-builder --win portable",
+    "build:windows": "electron-builder --win portable",
+    "build:linux": "electron-builder --linux AppImage",
+    "build:linux:deb": "electron-builder --linux deb",
+    "build:linux:rpm": "electron-builder --linux rpm"
   },
   "devDependencies": {
     "electron": "^34.3.0",
@@ -14,6 +19,26 @@
   "build": {
     "appId": "za.kilowatch.deepseekpriceclock",
     "productName": "DeepSeekPriceClock",
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "src/assets/icons/icon.png",
+      "artifactName": "DeepSeekPriceClock-${version}-${arch}.${ext}",
+      "syncDesktopName": true,
+      "desktop": {
+        "entry": {
+          "Name": "DeepSeek Price Clock",
+          "Comment": "DeepSeek API peak/off-peak price timer",
+          "Categories": "Utility;",
+          "Keywords": "DeepSeek;timer;pricing;API;",
+          "StartupWMClass": "za.kilowatch.deepseekpriceclock",
+          "Terminal": false,
+          "Type": "Application"
+        }
+      }
+    },
     "win": {
       "target": [
         "portable"
