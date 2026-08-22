@@ -590,10 +590,12 @@ button { font-family:inherit; }
 .estimate-saving { border-color:var(--color-off-border)!important; }
 .estimate-saving strong { color:var(--color-off); }
 .tip-card { border-left:2px solid var(--text-accent); padding:7px 9px; background:rgba(56,189,248,.06); border-radius:0 5px 5px 0; }
-.balance-card,.health-card { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:9px; padding:10px; }
+.balance-card,.health-card,.monitor-card { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:9px; padding:10px; }
 .balance-card strong,.health-card strong { display:block; color:var(--text-secondary); font-size:.72rem; margin-bottom:2px; }
 .health-card { justify-content:flex-start; }
 .health-card button { margin-left:auto; }
+.monitor-card strong { display:block; color:var(--text-secondary); font-size:.72rem; margin-bottom:2px; }
+.monitor-card code { display:block; max-width:245px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#bae6fd; font-size:.6rem; margin-top:5px; }
 .notification-history { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:9px; padding:9px; }
 .notification-history ul { list-style:none; max-height:105px; overflow:auto; }
 .notification-history li { color:var(--text-secondary); font-size:.67rem; padding:5px 0; border-top:1px solid var(--border-subtle); }

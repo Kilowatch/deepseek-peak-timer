@@ -20,7 +20,21 @@ test('off-peak runs through 01:00 UTC the following day', () => {
   const calc = new DeepSeekCalculator();
   const window = calc.getCurrentUtcWindow(utc(23, 0, 0));
   assert.equal(window.kind, 'off');
-  assert.equal(window.end.toISOString(), '2026-08-23T01:00:00.000Z');
+  assert.equal(window.end.toISOString(), '2026-08-24T01:00:00.000Z');
+});
+
+test('uses off-peak rates for the entire Beijing weekend after the effective time', () => {
+  const calc = new DeepSeekCalculator();
+  assert.equal(calc.getCurrentUtcWindow(new Date('2026-08-28T01:00:00.000Z')).kind, 'peak');
+  assert.equal(calc.getCurrentUtcWindow(new Date('2026-08-28T16:00:00.000Z')).kind, 'off');
+  assert.equal(calc.getCurrentUtcWindow(new Date('2026-08-29T01:00:00.000Z')).kind, 'off');
+  assert.equal(calc.getCurrentUtcWindow(new Date('2026-08-30T06:00:00.000Z')).kind, 'off');
+  assert.equal(calc.getCurrentUtcWindow(new Date('2026-08-31T01:00:00.000Z')).kind, 'peak');
+});
+
+test('shows a full off-peak timeline on Beijing weekends', () => {
+  const segments = new DeepSeekCalculator().getDisplaySegments(new Date('2026-08-23T06:00:00.000Z'));
+  assert.deepEqual(segments, [{ start: 0, end: 1440, kind: 'off' }]);
 });
 
 test('catalogue contains official V4 prices and half-price relationship', () => {
