@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, screen, safeStorage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,11 +10,12 @@ let isQuitting = false;
 let isPeakNow = false;
 
 const isLinux = process.platform === 'linux';
+const isWindows = process.platform === 'win32';
 const isWayland = isLinux && process.env.XDG_SESSION_TYPE === 'wayland';
 const appIconPath = path.join(__dirname, 'src', 'assets', 'icons', 'icon.png');
 
 const SIZES = {
-  expanded: { width: 360, height: 590, minWidth: 320, minHeight: 480 },
+  expanded: { width: 430, height: 680, minWidth: 360, minHeight: 540 },
   bar: { width: 230, height: 60, minWidth: 200, minHeight: 60 }
 };
 
@@ -35,6 +36,35 @@ function loadConfig() {
     lastBounds: null,
     autostart: false
   };
+}
+
+function getSecretPath() {
+  return path.join(app.getPath('userData'), 'deepseek-api-key.bin');
+}
+
+function saveApiKey(value) {
+  try {
+    if (!value) return false;
+    if (!safeStorage.isEncryptionAvailable()) return false;
+    const secret = safeStorage.encryptString(value);
+    fs.writeFileSync(getSecretPath(), secret, { mode: 0o600 });
+    return true;
+  } catch (error) { console.error('Could not store API key:', error); return false; }
+}
+
+function readApiKey() {
+  try {
+    const value = fs.readFileSync(getSecretPath());
+    return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(value) : '';
+  } catch (_) { return ''; }
+}
+
+function clearApiKey() { try { if (fs.existsSync(getSecretPath())) fs.unlinkSync(getSecretPath()); return true; } catch (_) { return false; } }
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try { return await fetch(url, Object.assign({}, options, { signal: controller.signal })); } finally { clearTimeout(timeout); }
 }
 
 function saveConfig(updates) {
@@ -114,6 +144,13 @@ function setLinuxAutostart(enabled) {
   }
 }
 
+function setAutostart(enabled) {
+  if (isLinux) return setLinuxAutostart(enabled);
+  if (isWindows) {
+    try { app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: app.isPackaged ? [] : [app.getAppPath()] }); } catch (error) { console.error('Could not update Windows autostart:', error); }
+  }
+}
+
 function createWindow() {
   const config = loadConfig();
   isPinned = config.pinned !== undefined ? config.pinned : true;
@@ -160,6 +197,10 @@ function createWindow() {
   mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://api-docs.deepseek.com/')) shell.openExternal(url);
+    return { action: 'deny' };
+  });
 
   if (isPinned) {
     applyAlwaysOnTop(mainWindow, true);
@@ -220,12 +261,12 @@ function updateTrayMenu() {
         saveConfig({ pinned: isPinned });
       }
     },
-    ...(isLinux ? [{
+    ...((isLinux || isWindows) ? [{
       label: 'Start Automatically on Login',
       type: 'checkbox',
       checked: loadConfig().autostart === true,
       click: (item) => {
-        setLinuxAutostart(item.checked);
+        setAutostart(item.checked);
         saveConfig({ autostart: item.checked });
       }
     }] : []),
@@ -344,12 +385,12 @@ ipcMain.on('show-context-menu', () => {
         saveConfig({ pinned: isPinned });
       }
     },
-    ...(isLinux ? [{
+    ...((isLinux || isWindows) ? [{
       label: 'Start Automatically on Login',
       type: 'checkbox',
       checked: loadConfig().autostart === true,
       click: (item) => {
-        setLinuxAutostart(item.checked);
+        setAutostart(item.checked);
         saveConfig({ autostart: item.checked });
       }
     }] : []),
@@ -413,6 +454,33 @@ ipcMain.on('send-notification', (event, { title, body }) => {
       icon: getTrayIcon(isPeakNow)
     }).show();
   }
+});
+
+ipcMain.handle('save-api-key', (event, value) => ({ ok: saveApiKey(String(value || '')) }));
+ipcMain.handle('clear-api-key', () => ({ ok: clearApiKey() }));
+
+ipcMain.handle('verify-pricing', async () => {
+  const checkedAt = new Date().toISOString();
+  try {
+    const response = await fetchWithTimeout('https://api-docs.deepseek.com/quick_start/pricing/', { headers: { 'User-Agent': 'DeepSeekPriceClock/1.1' } });
+    const text = await response.text();
+    const expected = ['01:00 - 04:00', '06:00 - 10:00', '$0.007', '$3.96'];
+    const ok = response.ok && expected.every((value) => text.includes(value));
+    return { ok, checkedAt, source: 'https://api-docs.deepseek.com/quick_start/pricing/' };
+  } catch (error) { return { ok: false, checkedAt, message: error.message }; }
+});
+
+ipcMain.handle('get-balance', async () => {
+  const key = readApiKey();
+  if (!key) return { ok: false, message: safeStorage.isEncryptionAvailable() ? 'No API key stored.' : 'Secure credential storage is unavailable on this system.' };
+  try {
+    const response = await fetchWithTimeout('https://api.deepseek.com/user/balance', { headers: { Authorization: 'Bearer ' + key, Accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok) return { ok: false, message: payload.error?.message || 'Balance request failed (' + response.status + ').' };
+    const infos = Array.isArray(payload.balance_infos) ? payload.balance_infos : [];
+    const balance = infos.map((item) => (item.currency || 'USD') + ' ' + (item.total_balance || item.balance || '0')).join(' · ') || 'Available';
+    return { ok: true, balance };
+  } catch (error) { return { ok: false, message: 'Balance request failed: ' + error.message }; }
 });
 
 app.whenReady().then(() => {

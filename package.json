@@ -1,11 +1,12 @@
 {
   "name": "deepseek-peak-timer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Floating desktop timer for DeepSeek peak/off-peak API pricing",
   "main": "main.js",
   "desktopName": "za.kilowatch.deepseekpriceclock.desktop",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
     "build:standalone": "electron-builder --win portable",
     "build:windows": "electron-builder --win portable",
     "build:linux": "electron-builder --linux AppImage",

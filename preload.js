@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showContextMenu: () => ipcRenderer.send('show-context-menu'),
   updateTrayStatus: (data) => ipcRenderer.send('update-tray-status', data),
   sendNotification: (data) => ipcRenderer.send('send-notification', data),
+  verifyPricing: () => ipcRenderer.invoke('verify-pricing'),
+  saveApiKey: (value) => ipcRenderer.invoke('save-api-key', value),
+  clearApiKey: () => ipcRenderer.invoke('clear-api-key'),
+  getBalance: () => ipcRenderer.invoke('get-balance'),
   onModeChanged: (callback) => ipcRenderer.on('mode-changed', (_event, value) => callback(value)),
   onStateChanged: (callback) => ipcRenderer.on('state-changed', (_event, value) => callback(value))
 });

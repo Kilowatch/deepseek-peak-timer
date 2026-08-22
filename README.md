@@ -34,10 +34,10 @@ No installation or Node.js runtime required! Download and run directly:
 - 🌍 **Automatic Local Timezone Detection**: Automatically detects your system timezone (e.g. `Africa/Johannesburg · GMT+2`) and maps the fixed UTC pricing schedule to your local clock, with a 1-click toggle to UTC.
 - 📊 **24-Hour Timeline Visualizer**: Color-coded 24-hour track (Green = Off-Peak, Red = Peak) with a real-time glowing needle marker.
 - 📅 **Upcoming Pricing Schedule Table**: Lists upcoming transitions with local time ranges, active duration, and time remaining.
-- 💰 **DeepSeek Model Pricing Cards**:
-  - **DeepSeek Flash**: `$0.22` input / `$0.66` output (Off-Peak) vs `$0.44` / `$1.32` (Peak).
-  - **DeepSeek Pro**: `$0.66` input / `$1.98` output (Off-Peak) vs `$1.32` / `$3.96` (Peak).
-  - Rate labels dynamically adjust based on active window.
+- 💰 **DeepSeek V4 Pricing Cards**: live peak/off-peak values for `deepseek-v4-flash`, `deepseek-v4-pro`, and `deepseek-v4-flash-vision-exp`, including cache-hit, cache-miss, and output billing.
+- 🧮 **Cost Calculator**: compare cache-hit, cache-miss, and output-token costs at peak versus off-peak prices.
+- 📈 **Private Usage & Budget Tools**: import/export local usage estimates, set a monthly budget, and optionally check balance with an OS-encrypted API key.
+- 🔔 **Configurable Feedback**: opt-in transition and advance alerts, quiet hours, notification history, and official-pricing verification.
 - 📌 **Always-On-Top & Freely Draggable**: Pin it anywhere on screen so it floats above your IDE, browser, or terminal.
 - 🗖 **Multi-Mode Windows**:
   1. **Floating Mini Bar**: Ultra-compact bar with `DEEPSEEK PEAK TIMER` header, status dot, live countdown timer, and `-50%` badge.
@@ -49,7 +49,7 @@ No installation or Node.js runtime required! Download and run directly:
 
 ## ⏰ DeepSeek Pricing Schedule (UTC)
 
-DeepSeek API discounts apply during fixed UTC hours:
+DeepSeek API uses fixed UTC peak/off-peak hours. Off-peak rates are half the peak rate. The bundled catalogue is based on the [official pricing page](https://api-docs.deepseek.com/quick_start/pricing/) effective August 16, 2026.
 
 | Window | UTC Time Range | Status | Rate Discount |
 | :--- | :--- | :---: | :---: |
