@@ -47,6 +47,15 @@ test('shows peak in red after 21:00 local when a Sunday crosses into Beijing Mon
   ]);
 });
 
+test('always includes the next peak in the rolling 24-hour forecast', () => {
+  const calc = new DeepSeekCalculator();
+  const now = new Date('2026-08-23T12:51:48.500Z');
+  const segments = calc.getForecastSegments(now);
+  assert.equal(segments[0].kind, 'off');
+  assert.equal(segments[1].kind, 'peak');
+  assert.equal(segments[1].start, (new Date('2026-08-24T01:00:00.000Z') - now) / 60000);
+});
+
 test('places the timeline marker at the exact displayed time, including seconds', () => {
   const calc = new DeepSeekCalculator();
   calc.setZone('utc');

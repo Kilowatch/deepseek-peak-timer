@@ -383,11 +383,14 @@ html, body {
 .timeline-ticks {
   display: flex;
   justify-content: space-between;
+  gap: 4px;
   margin-top: 4px;
   font-family: var(--font-mono);
   font-size: 0.6rem;
   color: var(--text-muted);
 }
+
+.timeline-ticks span { white-space: nowrap; }
 
 /* Upcoming Windows Table */
 .windows-section {
