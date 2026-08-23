@@ -366,6 +366,7 @@ html, body {
 }
 .seg-off { background: var(--color-off); opacity: 0.9; }
 .seg-peak { background: var(--color-peak); opacity: 0.9; }
+.seg-elapsed { opacity: 0.22; filter: saturate(0.45); }
 
 .timeline-needle {
   position: absolute;

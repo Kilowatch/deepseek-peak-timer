@@ -32,9 +32,27 @@ test('uses off-peak rates for the entire Beijing weekend after the effective tim
   assert.equal(calc.getCurrentUtcWindow(new Date('2026-08-31T01:00:00.000Z')).kind, 'peak');
 });
 
-test('shows a full off-peak timeline on Beijing weekends', () => {
+test('shows the next Beijing weekday peak block after a weekend day ends', () => {
   const segments = new DeepSeekCalculator().getDisplaySegments(new Date('2026-08-23T06:00:00.000Z'));
-  assert.deepEqual(segments, [{ start: 0, end: 1440, kind: 'off' }]);
+  assert.deepEqual(segments, [{ start: 0, end: 1260, kind: 'off' }, { start: 1260, end: 1440, kind: 'peak' }]);
+});
+
+test('shows peak in red after 21:00 local when a Sunday crosses into Beijing Monday', () => {
+  const calc = new DeepSeekCalculator();
+  calc.getDisplayOffset = () => -240; // America/Toronto during daylight saving time.
+  const segments = calc.getDisplaySegments(new Date('2026-08-23T12:51:48.500Z'));
+  assert.deepEqual(segments, [
+    { start: 0, end: 1260, kind: 'off' },
+    { start: 1260, end: 1440, kind: 'peak' }
+  ]);
+});
+
+test('places the timeline marker at the exact displayed time, including seconds', () => {
+  const calc = new DeepSeekCalculator();
+  calc.setZone('utc');
+  const now = new Date('2026-08-24T08:51:48.500Z');
+  assert.ok(Math.abs(calc.getDisplayMinute(now) - 531.8083333333333) < 1e-10);
+  assert.ok(Math.abs(calc.getTimelinePosition(now) - 36.93113425925926) < 1e-10);
 });
 
 test('catalogue contains official V4 prices and half-price relationship', () => {
