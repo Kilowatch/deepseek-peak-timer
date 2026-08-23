@@ -381,16 +381,20 @@ html, body {
 }
 
 .timeline-ticks {
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
+  position: relative;
+  height: 28px;
   margin-top: 4px;
   font-family: var(--font-mono);
   font-size: 0.6rem;
   color: var(--text-muted);
 }
 
-.timeline-ticks span { white-space: nowrap; }
+.timeline-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.timeline-ticks .timeline-tick-top { top: 0; }
+.timeline-ticks .timeline-tick-bottom { top: 14px; }
+.timeline-ticks .timeline-tick-now { transform: none; }
+.timeline-ticks .timeline-tick-peak { color: var(--color-peak); }
+.timeline-ticks .timeline-tick-off { color: var(--color-off); }
 
 /* Upcoming Windows Table */
 .windows-section {
