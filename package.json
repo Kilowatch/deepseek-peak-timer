@@ -1,6 +1,6 @@
 {
   "name": "deepseek-peak-timer",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Floating desktop timer for DeepSeek peak/off-peak API pricing",
   "main": "main.js",
   "desktopName": "za.kilowatch.deepseekpriceclock.desktop",

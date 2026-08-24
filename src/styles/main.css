@@ -392,9 +392,24 @@ html, body {
 .timeline-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .timeline-ticks .timeline-tick-top { top: 0; }
 .timeline-ticks .timeline-tick-bottom { top: 14px; }
-.timeline-ticks .timeline-tick-now { transform: none; }
+.timeline-ticks .timeline-tick-start { transform: none; }
 .timeline-ticks .timeline-tick-peak { color: var(--color-peak); }
 .timeline-ticks .timeline-tick-off { color: var(--color-off); }
+
+.timeline-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.58rem;
+  font-weight: 650;
+}
+
+.timeline-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.legend-swatch { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.legend-off { background: var(--color-off); }
+.legend-peak { background: var(--color-peak); }
 
 /* Upcoming Windows Table */
 .windows-section {
