@@ -1,293 +1,32 @@
-/**
- * DeepSeek Floating Widget Frontend Controller
- */
-
-document.addEventListener('DOMContentLoaded', async function () {
-  const calc = new DeepSeekCalculator();
-  const api = window.electronAPI;
-
-  let currentMode = 'bar';
-  let isPinned = true;
-  let previousWindowKind = null;
-
-  // Views
-  const viewExpanded = document.getElementById('view-expanded');
-  const viewBar = document.getElementById('view-bar');
-
-  // Expanded View Elements
-  const heroEl = document.getElementById('hero-status');
-  const badgeDot = document.getElementById('badge-dot');
-  const badgeText = document.getElementById('badge-text');
-  const countTimer = document.getElementById('count-timer');
-  const nextPrompt = document.getElementById('next-prompt');
-  
-  const timelineTrack = document.getElementById('timeline-track');
-  const timelineNeedle = document.getElementById('timeline-needle');
-  const tzLabel = document.getElementById('tz-label');
-  const tzFooterInfo = document.getElementById('tz-footer-info');
-  const tzToggleBtns = document.querySelectorAll('.tz-btn');
-
-  const windowsBody = document.getElementById('windows-table-body');
-  const ratesStatusHeader = document.getElementById('rates-status-header');
-
-  // Buttons
-  const pinBtn = document.getElementById('btn-pin');
-  const minimizeBarBtn = document.getElementById('btn-minimize-bar');
-  const minimizeTrayBtn = document.getElementById('btn-minimize-tray');
-  const closeBtn = document.getElementById('btn-close');
-  const barExpandBtn = document.getElementById('btn-bar-expand');
-
-  // Bar View Elements
-  const barDot = document.getElementById('bar-dot');
-  const barTimer = document.getElementById('bar-timer');
-  const barStatus = document.getElementById('bar-status');
-
-  if (api) {
-    const config = await api.getConfig();
-    if (config) {
-      const initMode = (config.mode === 'expanded') ? 'expanded' : 'bar';
-      setViewMode(initMode, false);
-      if (config.zone) calc.setZone(config.zone);
-      if (config.pinned !== undefined) isPinned = config.pinned;
-    }
-
-    api.onModeChanged(function (data) {
-      if (data && data.mode) {
-        setViewMode(data.mode, false);
-      }
-    });
-
-    api.onStateChanged(function (data) {
-      if (data && data.pinned !== undefined) {
-        isPinned = data.pinned;
-        updatePinUI();
-      }
-    });
-  }
-
-  function setViewMode(mode, notifyMain) {
-    if (notifyMain === undefined) notifyMain = true;
-    currentMode = mode;
-    document.body.setAttribute('data-mode', mode);
-
-    viewExpanded.classList.toggle('active', mode === 'expanded');
-    viewBar.classList.toggle('active', mode === 'bar');
-
-    if (notifyMain && api) {
-      api.setMode(mode);
-    }
-  }
-
-  function updatePinUI() {
-    if (pinBtn) {
-      pinBtn.classList.toggle('active', isPinned);
-      pinBtn.setAttribute('title', isPinned ? 'Always on Top (Pinned)' : 'Not pinned');
-    }
-  }
-
-  function renderTimelineTrack() {
-    if (!timelineTrack) return;
-    timelineTrack.innerHTML = '';
-    const segments = calc.getDisplaySegments();
-    segments.forEach(function (seg) {
-      const div = document.createElement('div');
-      div.className = 'seg seg-' + seg.kind;
-      div.style.width = ((seg.end - seg.start) / 1440 * 100).toFixed(4) + '%';
-      timelineTrack.appendChild(div);
-    });
-  }
-
-  function renderWindowsTable(now) {
-    if (!windowsBody) return;
-    windowsBody.innerHTML = '';
-    const formatters = calc.getFormatters();
-    const timeFmt = formatters.timeFmt;
-    const windows = calc.getWindowList(now, 4);
-
-    windows.forEach(function (win) {
-      const tr = document.createElement('tr');
-      tr.className = 'win-row win-' + win.kind + (win.current ? ' win-current' : '');
-
-      const kindTd = document.createElement('td');
-      kindTd.className = 'win-kind';
-      kindTd.innerHTML = '<span class="table-dot dot-' + win.kind + '"></span> ' + (win.kind === 'peak' ? 'Peak' : 'Off-Peak');
-
-      const rangeTd = document.createElement('td');
-      rangeTd.className = 'win-range';
-      rangeTd.textContent = timeFmt.format(win.start) + ' – ' + timeFmt.format(win.end);
-
-      const metaTd = document.createElement('td');
-      metaTd.className = 'win-meta';
-      metaTd.textContent = win.current
-        ? (calc.formatAwayLabel(win.end.getTime() - now.getTime()) + ' left')
-        : calc.formatDurationLabel(win.end.getTime() - win.start.getTime());
-
-      tr.appendChild(kindTd);
-      tr.appendChild(rangeTd);
-      tr.appendChild(metaTd);
-      windowsBody.appendChild(tr);
-    });
-  }
-
-  function updateTzDisplay() {
-    const tzStr = calc.zone === 'utc'
-      ? 'UTC'
-      : (calc.autoDetectedTimezone + ' · ' + calc.getGmtOffsetLabel());
-
-    if (tzLabel) tzLabel.textContent = calc.zone === 'utc' ? 'UTC' : 'Local Time';
-    if (tzFooterInfo) tzFooterInfo.textContent = tzStr;
-
-    tzToggleBtns.forEach(function (btn) {
-      btn.classList.toggle('active', btn.getAttribute('data-zone') === calc.zone);
-    });
-  }
-
-  function updateRatesHighlight(isPeak) {
-    if (ratesStatusHeader) {
-      ratesStatusHeader.textContent = isPeak
-        ? 'Paying Now · Peak Rates (Standard)'
-        : 'Paying Now · Off-Peak Rates (50% OFF)';
-    }
-
-    const rateCards = document.querySelectorAll('.rate-val');
-    rateCards.forEach(function (el) {
-      const val = isPeak ? el.getAttribute('data-peak') : el.getAttribute('data-off');
-      if (val) el.textContent = val;
-    });
-  }
-
-  function tick() {
-    const now = new Date();
-    const win = calc.getCurrentUtcWindow(now);
-    const isPeak = win.isPeak;
-    const remainingMs = win.end.getTime() - now.getTime();
-    const countdownStr = calc.formatClock(remainingMs / 1000);
-    const formatters = calc.getFormatters();
-    const timeZoneFmt = formatters.timeZoneFmt;
-
-    if (previousWindowKind !== null && previousWindowKind !== win.kind) {
-      if (api) {
-        api.sendNotification({
-          title: isPeak ? '🔴 DeepSeek Peak Rates Active' : '🟢 DeepSeek Off-Peak Started (50% OFF)',
-          body: isPeak
-            ? ('Standard rates active. Off-peak resumes at ' + timeZoneFmt.format(win.end))
-            : '50% discount is now active on DeepSeek Flash & DeepSeek Pro!'
-        });
-      }
-    }
-    previousWindowKind = win.kind;
-
-    // 1. Full Dashboard View
-    if (heroEl) {
-      heroEl.className = 'hero-card hero-' + win.kind;
-    }
-    if (badgeDot) {
-      badgeDot.className = 'status-dot dot-' + win.kind;
-    }
-    if (badgeText) {
-      badgeText.textContent = isPeak ? 'PEAK PRICING' : 'OFF-PEAK · 50% DISCOUNT';
-    }
-    if (countTimer) {
-      countTimer.textContent = countdownStr;
-    }
-    if (nextPrompt) {
-      nextPrompt.textContent = '→ ' + (isPeak ? 'Off-peak starts' : 'Peak starts') + ' at ' + timeZoneFmt.format(win.end);
-    }
-
-    // 2. Timeline Needle
-    if (timelineNeedle) {
-      const displayMinute = (win.minuteOfDay + now.getUTCSeconds() / 60 + calc.getDisplayOffset() + 1440) % 1440;
-      timelineNeedle.style.left = (displayMinute / 1440 * 100) + '%';
-    }
-
-    renderWindowsTable(now);
-    updateRatesHighlight(isPeak);
-
-    // 3. Floating Mini Bar with Timer
-    if (barDot) {
-      barDot.className = 'bar-dot dot-' + win.kind;
-    }
-    if (barTimer) {
-      barTimer.textContent = countdownStr;
-    }
-    if (barStatus) {
-      barStatus.textContent = isPeak ? 'PEAK' : '-50%';
-      barStatus.className = 'bar-tag tag-' + win.kind;
-    }
-
-    // 4. System Tray in Toolbar
-    if (api) {
-      api.updateTrayStatus({
-        isPeak: isPeak,
-        tooltip: 'DeepSeek: ' + (isPeak ? 'PEAK RATES 🔴' : 'OFF-PEAK (50% OFF) 🟢') + ' | ' + countdownStr + ' left'
-      });
-    }
-  }
-
-  // Header Controls
-  if (pinBtn) {
-    pinBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (api) api.togglePin();
-    });
-  }
-
-  if (minimizeBarBtn) {
-    minimizeBarBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      setViewMode('bar', true);
-    });
-  }
-
-  if (minimizeTrayBtn) {
-    minimizeTrayBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      setViewMode('tray', true);
-    });
-  }
-
-  if (closeBtn) {
-    closeBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (api) api.closeApp();
-    });
-  }
-
-  // Mini Bar Expand
-  if (barExpandBtn) {
-    barExpandBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      setViewMode('expanded', true);
-    });
-  }
-
-  if (viewBar) {
-    viewBar.addEventListener('dblclick', function () {
-      setViewMode('expanded', true);
-    });
-  }
-
-  // Right-click context menu anywhere
-  window.addEventListener('contextmenu', function (e) {
-    e.preventDefault();
-    if (api) api.showContextMenu();
-  });
-
-  tzToggleBtns.forEach(function (btn) {
-    btn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      const nextZone = btn.getAttribute('data-zone');
-      calc.setZone(nextZone);
-      if (api) api.saveConfig({ zone: nextZone });
-      updateTzDisplay();
-      renderTimelineTrack();
-      tick();
-    });
-  });
-
-  updatePinUI();
-  updateTzDisplay();
-  renderTimelineTrack();
-  tick();
-  setInterval(tick, 1000);
+document.addEventListener('DOMContentLoaded', async () => {
+  const calc = new DeepSeekCalculator(); const api = window.electronAPI; let config = {}; let mode = 'bar'; let pinned = true; let previousKind = null; let lastMinute = null; let timelineSignature = null; let renderedRateKind = null; let alerted = new Set(); let usage = [];
+  const $ = (id) => document.getElementById(id); const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+  const money = (value) => '$' + Number(value || 0).toFixed(value < 0.01 ? 4 : 2);
+  const modelOptions = () => PRICING_CATALOGUE.models.map((model) => '<option value="' + model.id + '">' + model.id + '</option>').join('');
+  function save(updates) { config = Object.assign(config, updates); if (api) api.saveConfig(updates); }
+  function history(message) { const item = { at: new Date().toISOString(), message }; const next = [item].concat(config.notificationHistory || []).slice(0, 20); save({ notificationHistory: next }); renderHistory(); }
+  function renderHistory() { const el = $('notification-history'); el.innerHTML = ''; const entries = config.notificationHistory || []; if (!entries.length) { el.innerHTML = '<li>No alerts yet.</li>'; return; } entries.forEach((entry) => { const li = document.createElement('li'); li.textContent = new Date(entry.at).toLocaleString() + ' · ' + entry.message; el.appendChild(li); }); }
+  function setMode(next, notify = true) { mode = next; document.body.dataset.mode = next; $('view-bar').classList.toggle('active', next === 'bar'); $('view-expanded').classList.toggle('active', next === 'expanded'); if (notify && api) api.setMode(next); }
+  function setTab(tab) { $$('.tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab)); $$('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === tab)); }
+  function updatePin() { $('btn-pin').classList.toggle('active', pinned); $('btn-pin').title = pinned ? 'Always on top' : 'Always on top disabled'; }
+  function renderTimeline(now, force = false) { const segments = calc.getForecastSegments(now); const signature = Math.floor(now.getTime() / 60000) + ':' + calc.getCurrentUtcWindow(now).end.getTime() + ':' + segments.map((segment) => segment.kind).join(':'); if (!force && signature === timelineSignature) return; const track = $('timeline-track'); track.innerHTML = ''; segments.forEach((segment) => { const el = document.createElement('div'); el.className = 'seg seg-' + segment.kind; el.style.width = ((segment.end - segment.start) / 1440 * 100).toFixed(3) + '%'; track.appendChild(el); }); const formatter = calc.getFormatters().timeFmt; const ticks = $('timeline-ticks'); ticks.innerHTML = ''; segments.slice(1).forEach((segment, index) => { const tick = document.createElement('span'); const position = segment.start / 1440 * 100; tick.className = 'timeline-tick-' + segment.kind + ' ' + (index % 2 ? 'timeline-tick-bottom' : 'timeline-tick-top') + (position < 8 ? ' timeline-tick-start' : ''); tick.textContent = formatter.format(new Date(now.getTime() + segment.start * 60000)); tick.style.left = position.toFixed(3) + '%'; ticks.appendChild(tick); }); timelineSignature = signature; }
+  function renderWindows(now) { const body = $('windows-table-body'); body.innerHTML = ''; const formatter = calc.getFormatters().timeFmt; calc.getWindowList(now, 4).forEach((window) => { const row = document.createElement('tr'); row.className = 'win-row win-' + window.kind + (window.current ? ' win-current' : ''); row.innerHTML = '<td class="win-kind"><span class="table-dot dot-' + window.kind + '"></span>' + (window.kind === 'peak' ? 'Peak' : 'Off-peak') + '</td><td class="win-range"></td><td class="win-meta"></td>'; row.children[1].textContent = formatter.format(window.start) + ' – ' + formatter.format(window.end); row.children[2].textContent = window.current ? calc.formatAwayLabel(window.end - now) + ' left' : calc.formatDurationLabel(window.end - window.start); body.appendChild(row); }); }
+  function renderRates(kind) { if (kind === renderedRateKind) return; const grid = $('rates-grid'); grid.innerHTML = ''; PRICING_CATALOGUE.models.forEach((model) => { const card = document.createElement('div'); card.className = 'rate-box ' + (kind === 'peak' ? 'peak-rate' : 'current-rate'); card.innerHTML = '<div class="model-name">' + model.label + '</div>'; [['Cache hit', model.cacheHit[kind]], ['Cache miss', model.cacheMiss[kind]], ['Output', model.output[kind]]].forEach(([label, price]) => { const cell = document.createElement('div'); cell.className = 'rate-cell'; cell.innerHTML = '<span>' + label + '</span><strong>' + money(price) + '</strong>'; card.appendChild(cell); }); grid.appendChild(card); }); renderedRateKind = kind; }
+  function updateZone() { const now = new Date(); const label = calc.zone === 'beijing' ? 'Beijing time' : (calc.zone === 'utc' ? 'UTC' : 'Local time'); $('tz-label').textContent = label; $('tz-footer-info').textContent = calc.zone === 'local' ? calc.autoDetectedTimezone + ' · ' + calc.getGmtOffsetLabel(now) : calc.getTimezoneName() + ' · ' + calc.getGmtOffsetLabel(now); $('setting-zone').value = calc.zone; $$('.tz-btn').forEach((button) => button.classList.toggle('active', button.dataset.zone === calc.zone)); renderTimeline(now, true); }
+  function calculateEstimate() { const requests = Math.max(1, Number($('calc-requests').value || 1)); const values = { cacheHit: Number($('calc-cache-hit').value || 0) * requests, cacheMiss: Number($('calc-cache-miss').value || 0) * requests, output: Number($('calc-output').value || 0) * requests }; const model = $('calc-model').value; const off = calc.estimate(model, values, 'off'); const peak = calc.estimate(model, values, 'peak'); $('estimate-off').textContent = money(off); $('estimate-peak').textContent = money(peak); $('estimate-saving').textContent = money(peak - off); }
+  function dayKey(date) { return date.toISOString().slice(0, 10); }
+  function renderUsage() { const now = new Date(); const today = dayKey(now); const month = today.slice(0, 7); const totals = usage.reduce((output, item) => { const cost = Number(item.cost || 0); const kind = item.kind || calc.getCurrentUtcWindow(new Date(item.at)).kind; if (String(item.at).slice(0, 10) === today) output.today += cost; if (String(item.at).slice(0, 7) === month) output.month += cost; output[kind] += cost; output[kind + 'Tokens'] += Number(item.cacheHit || 0) + Number(item.cacheMiss || 0) + Number(item.output || 0); return output; }, { today: 0, month: 0, off: 0, peak: 0, offTokens: 0, peakTokens: 0 }); $('usage-today').textContent = money(totals.today); $('usage-month').textContent = money(totals.month); $('usage-off').textContent = money(totals.off); $('usage-peak').textContent = money(totals.peak); const totalTokens = totals.offTokens + totals.peakTokens; $('usage-ratio').textContent = totalTokens ? Math.round(totals.offTokens / totalTokens * 100) + '% tokens' : 'No data'; const budget = Number(config.monthlyBudget || 0); $('usage-budget').textContent = budget ? money(Math.max(0, budget - totals.month)) : 'Not set'; }
+  function renderMonitor(status) { const running = status && status.running; $('monitor-status').textContent = running ? 'Recording non-streaming requests locally. Prompt and response text are never saved.' : 'Off. Start it to proxy non-streaming Chat Completions and measure peak/off-peak token usage.'; $('monitor-endpoint').hidden = !running; if (running) $('monitor-endpoint').textContent = 'Base URL: http://127.0.0.1:' + status.port + '/v1 · Bearer token: ' + status.token; $('start-monitor').disabled = running; $('stop-monitor').disabled = !running; }
+  function applySettingsToForm() { $('setting-zone').value = config.zone || 'local'; $('alert-lead').value = String(config.alertLead || 0); $('quiet-start').value = config.quietStart || ''; $('quiet-end').value = config.quietEnd || ''; $('notify-peak').checked = config.notifyPeak === true; $('notify-off').checked = config.notifyOff === true; $('monthly-budget').value = config.monthlyBudget || ''; }
+  function quietNow() { const start = config.quietStart; const end = config.quietEnd; if (!start || !end) return false; const current = new Date().toTimeString().slice(0, 5); return start < end ? current >= start && current < end : current >= start || current < end; }
+  function notify(kind, title, body, key) { if (quietNow() || alerted.has(key)) return; alerted.add(key); history(body); if (api) api.sendNotification({ title, body }); }
+  function tick() { const now = new Date(); const window = calc.getCurrentUtcWindow(now); const kind = window.kind; const remaining = window.end - now; const formatter = calc.getFormatters().timeZoneFmt; const countdown = calc.formatClock(remaining / 1000); $('hero-status').className = 'hero-card hero-' + kind; $('badge-dot').className = 'status-dot dot-' + kind; $('badge-text').textContent = kind === 'peak' ? 'PEAK PRICING' : 'OFF-PEAK · 50% OFF'; $('count-timer').textContent = countdown; $('count-suffix').textContent = kind === 'peak' ? 'until off-peak pricing' : 'until peak pricing'; $('next-prompt').textContent = (kind === 'peak' ? 'Off-peak begins' : 'Peak pricing begins') + ' at ' + formatter.format(window.end); $('bar-dot').className = 'bar-dot dot-' + kind; $('bar-timer').textContent = countdown; $('bar-status').className = 'bar-tag tag-' + kind; $('bar-status').textContent = kind === 'peak' ? 'PEAK' : 'OFF-PEAK'; renderTimeline(now); $('timeline-needle').style.left = '0%'; $('rates-status-header').textContent = 'Current ' + (kind === 'peak' ? 'peak' : 'off-peak') + ' rates'; $('best-window').textContent = kind === 'off' ? 'Best time to run workloads' : 'Next off-peak: ' + formatter.format(window.end); if (lastMinute !== now.getMinutes()) { renderWindows(now); lastMinute = now.getMinutes(); } renderRates(kind); if (previousKind && previousKind !== kind) { const enabled = kind === 'peak' ? config.notifyPeak : config.notifyOff; if (enabled) notify(kind, kind === 'peak' ? 'DeepSeek peak pricing active' : 'DeepSeek off-peak started', kind === 'peak' ? 'Standard peak rates are now active.' : 'Off-peak rates are now active at half the peak price.', 'transition-' + now.toISOString().slice(0, 13)); } previousKind = kind; const lead = Number(config.alertLead || 0); const minutes = Math.ceil(remaining / 60000); if (lead && minutes === lead) notify('lead', 'DeepSeek pricing change soon', (kind === 'peak' ? 'Off-peak' : 'Peak') + ' pricing begins in ' + lead + ' minutes.', 'lead-' + now.toISOString().slice(0, 13)); if (api) api.updateTrayStatus({ isPeak: kind === 'peak', tooltip: 'DeepSeek: ' + (kind === 'peak' ? 'PEAK' : 'OFF-PEAK 50%') + ' · ' + countdown + ' remaining' }); }
+  async function verifyPricing() { $('pricing-health').textContent = 'Verifying official source…'; try { const result = await api.verifyPricing(); $('pricing-health').textContent = result.ok ? 'Verified ' + new Date(result.checkedAt).toLocaleString() + ' · catalogue ' + PRICING_CATALOGUE.version : 'Could not verify source; bundled catalogue remains active.'; $('catalogue-status').textContent = result.ok ? 'Verified ' + new Date(result.checkedAt).toLocaleDateString() : 'Bundled catalogue · verification unavailable'; save({ pricingCheck: result }); } catch (_) { $('pricing-health').textContent = 'Verification unavailable; using bundled official catalogue.'; } }
+  async function checkBalance() { $('balance-status').textContent = 'Checking balance…'; const result = await api.getBalance(); $('balance-status').textContent = result.ok ? 'Available balance: ' + result.balance : (result.message || 'Balance check unavailable.'); }
+  async function importUsage(file) { if (!file) return; try { const parsed = JSON.parse(await file.text()); const entries = Array.isArray(parsed) ? parsed : parsed.usage; if (!Array.isArray(entries)) throw new Error('Expected an array.'); usage = entries.filter((item) => item && Number.isFinite(Number(item.cost))).slice(-5000); save({ usage }); renderUsage(); history('Imported ' + usage.length + ' local usage records.'); } catch (error) { alert('Could not import usage: ' + error.message); } }
+  function exportUsage() { const url = URL.createObjectURL(new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), usage }, null, 2)], { type: 'application/json' })); const link = document.createElement('a'); link.href = url; link.download = 'deepseek-price-clock-usage.json'; link.click(); URL.revokeObjectURL(url); }
+  if (api) { config = await api.getConfig() || {}; usage = Array.isArray(config.usage) ? config.usage : []; calc.setZone(config.zone || 'local'); pinned = config.pinned !== false; setMode(config.mode === 'expanded' ? 'expanded' : 'bar', false); api.onModeChanged((data) => setMode(data.mode, false)); api.onStateChanged((data) => { if (data.pinned !== undefined) { pinned = data.pinned; updatePin(); } }); }
+  $('calc-model').innerHTML = modelOptions(); applySettingsToForm(); updateZone(); updatePin(); renderHistory(); renderUsage(); $('catalogue-status').textContent = 'Catalogue ' + PRICING_CATALOGUE.version; verifyPricing(); tick(); setInterval(tick, 1000); if (api) { renderMonitor(await api.getUsageProxyStatus()); api.onUsageRecorded((entry) => { usage.push(entry); usage = usage.slice(-5000); renderUsage(); }); }
+  $('btn-pin').addEventListener('click', () => api && api.togglePin()); $('btn-minimize-bar').addEventListener('click', () => setMode('bar')); $('btn-minimize-tray').addEventListener('click', () => setMode('tray')); $('btn-close').addEventListener('click', () => api && api.closeApp()); $('btn-bar-expand').addEventListener('click', () => setMode('expanded')); $('view-bar').addEventListener('dblclick', () => setMode('expanded')); $$('.tab').forEach((button) => button.addEventListener('click', () => setTab(button.dataset.tab))); $$('.tz-btn').forEach((button) => button.addEventListener('click', () => { calc.setZone(button.dataset.zone); save({ zone: calc.zone }); updateZone(); tick(); }));
+  ['calc-model', 'calc-cache-hit', 'calc-cache-miss', 'calc-output', 'calc-requests'].forEach((id) => $(id).addEventListener('input', calculateEstimate)); calculateEstimate(); $('setting-zone').addEventListener('change', () => { calc.setZone($('setting-zone').value); updateZone(); tick(); }); $('save-settings').addEventListener('click', async () => { const settings = { zone: $('setting-zone').value, alertLead: Number($('alert-lead').value), quietStart: $('quiet-start').value, quietEnd: $('quiet-end').value, notifyPeak: $('notify-peak').checked, notifyOff: $('notify-off').checked, monthlyBudget: Number($('monthly-budget').value || 0) }; save(settings); calc.setZone(settings.zone); updateZone(); if ($('api-key').value) await api.saveApiKey($('api-key').value); $('api-key').value = ''; history('Preferences saved.'); }); $('clear-key').addEventListener('click', async () => { await api.clearApiKey(); $('balance-status').textContent = 'No API key stored.'; }); $('refresh-pricing').addEventListener('click', verifyPricing); $('refresh-balance').addEventListener('click', checkBalance); $('start-monitor').addEventListener('click', async () => { const result = await api.startUsageProxy(); renderMonitor(result.ok ? Object.assign({ running: true }, result) : { running: false }); if (!result.ok) $('monitor-status').textContent = result.message; }); $('stop-monitor').addEventListener('click', async () => { await api.stopUsageProxy(); renderMonitor({ running: false }); }); $('monthly-budget').addEventListener('input', () => { save({ monthlyBudget: Number($('monthly-budget').value || 0) }); renderUsage(); }); $('usage-import').addEventListener('change', (event) => importUsage(event.target.files[0])); $('export-usage').addEventListener('click', exportUsage); $('clear-usage').addEventListener('click', () => { usage = []; save({ usage }); renderUsage(); history('Cleared local usage records.'); }); window.addEventListener('contextmenu', (event) => { event.preventDefault(); if (api) api.showContextMenu(); });
 });

@@ -1,221 +1,42 @@
-/**
- * DeepSeek Pricing Clock Calculator Engine
- */
-
-const TRANSITIONS = [
-  { minute: 0, kind: "off" },
-  { minute: 60, kind: "peak" },
-  { minute: 240, kind: "off" },
-  { minute: 360, kind: "peak" },
-  { minute: 600, kind: "off" }
-];
-
-const SWITCHES = TRANSITIONS.filter(function (t, i) {
-  const prev = TRANSITIONS[(i - 1 + TRANSITIONS.length) % TRANSITIONS.length];
-  return t.kind !== prev.kind;
-});
+/** DeepSeek V4 peak/off-peak schedule and cost calculator. */
+const PRICING_SOURCE = 'https://api-docs.deepseek.com/quick_start/pricing/';
+const CHANGELOG_SOURCE = 'https://api-docs.deepseek.com/updates/';
+const PRICING_EFFECTIVE_AT = '2026-08-16T16:00:00Z';
+// From 2026-08-23 00:00 Beijing time, Saturday and Sunday use off-peak rates all day.
+const WEEKEND_OFF_PEAK_EFFECTIVE_AT = Date.parse('2026-08-22T16:00:00Z');
+const PRICING_CATALOGUE = {
+  version: '2026-08-16',
+  models: [
+    { id: 'deepseek-v4-flash', label: 'V4 Flash', cacheHit: { off: 0.007, peak: 0.014 }, cacheMiss: { off: 0.22, peak: 0.44 }, output: { off: 0.66, peak: 1.32 }, concurrency: 2500 },
+    { id: 'deepseek-v4-pro', label: 'V4 Pro', cacheHit: { off: 0.022, peak: 0.044 }, cacheMiss: { off: 0.66, peak: 1.32 }, output: { off: 1.98, peak: 3.96 }, concurrency: 500 },
+    { id: 'deepseek-v4-flash-vision-exp', label: 'V4 Flash Vision (Exp)', cacheHit: { off: 0.007, peak: 0.014 }, cacheMiss: { off: 0.22, peak: 0.44 }, output: { off: 0.66, peak: 1.32 }, concurrency: 2500, note: 'Images are converted to input tokens.' }
+  ]
+};
+const TRANSITIONS = [{ minute: 0, kind: 'off' }, { minute: 60, kind: 'peak' }, { minute: 240, kind: 'off' }, { minute: 360, kind: 'peak' }, { minute: 600, kind: 'off' }];
+const SWITCHES = TRANSITIONS.filter((item, index) => item.kind !== TRANSITIONS[(index + TRANSITIONS.length - 1) % TRANSITIONS.length].kind);
 
 class DeepSeekCalculator {
-  constructor() {
-    this.zone = "local";
-    this.autoDetectedTimezone = this.detectLocalTimezone();
-  }
-
-  detectLocalTimezone() {
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone || "Local Time";
-    } catch (e) {
-      return "Local Time";
-    }
-  }
-
-  getTimezoneName() {
-    return this.zone === "utc" ? "UTC" : this.autoDetectedTimezone;
-  }
-
-  getGmtOffsetLabel() {
-    const offsetMinutes = this.getDisplayOffset();
-    const sign = offsetMinutes >= 0 ? "+" : "−";
-    const abs = Math.abs(offsetMinutes);
-    const hours = Math.floor(abs / 60);
-    const minutes = abs % 60;
-    return "GMT" + sign + hours + (minutes ? ":" + (minutes < 10 ? "0" : "") + minutes : "");
-  }
-
-  getDisplayOffset() {
-    return this.zone === "utc" ? 0 : -new Date().getTimezoneOffset();
-  }
-
-  setZone(newZone) {
-    if (newZone === "local" || newZone === "utc") {
-      this.zone = newZone;
-    }
-  }
-
-  getFormatters() {
-    const isUtc = this.zone === "utc";
-    const base = isUtc
-      ? { hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false }
-      : { hour: "2-digit", minute: "2-digit", hour12: false };
-    
-    return {
-      timeFmt: new Intl.DateTimeFormat(undefined, base),
-      timeZoneFmt: new Intl.DateTimeFormat(undefined, Object.assign({}, base, { timeZoneName: "short" }))
-    };
-  }
-
-  formatClock(totalSeconds) {
-    const sec = Math.max(0, Math.floor(totalSeconds));
-    const hours = Math.floor(sec / 3600);
-    const minutes = Math.floor((sec % 3600) / 60);
-    const seconds = sec % 60;
-    return (
-      (hours < 10 ? "0" : "") + hours + ":" +
-      (minutes < 10 ? "0" : "") + minutes + ":" +
-      (seconds < 10 ? "0" : "") + seconds
-    );
-  }
-
-  formatAwayLabel(milliseconds) {
-    const mins = Math.max(0, Math.floor(milliseconds / 60000));
-    const hours = Math.floor(mins / 60);
-    return hours ? (hours + "h " + (mins % 60) + "m") : (mins + "m");
-  }
-
-  formatDurationLabel(milliseconds) {
-    const mins = Math.max(0, Math.round(milliseconds / 60000));
-    const hours = Math.floor(mins / 60);
-    const rest = mins % 60;
-    if (!hours) return rest + "m";
-    return rest ? (hours + "h " + rest + "m") : (hours + "h");
-  }
-
-  getCurrentUtcWindow(now) {
-    if (!now) now = new Date();
-    const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
-    let index = 0;
-    for (let i = 0; i < TRANSITIONS.length; i++) {
-      if (TRANSITIONS[i].minute <= minuteOfDay) {
-        index = i;
-      }
-    }
-    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const next = TRANSITIONS[index + 1];
-    let endMinute = next ? next.minute : 1440;
-    let nextKind = next ? next.kind : TRANSITIONS[0].kind;
-
-    if (!next && nextKind === TRANSITIONS[index].kind) {
-      endMinute = 1440 + TRANSITIONS[1].minute;
-      nextKind = TRANSITIONS[1].kind;
-    }
-
-    return {
-      kind: TRANSITIONS[index].kind,
-      isPeak: TRANSITIONS[index].kind === "peak",
-      nextKind: nextKind,
-      end: new Date(dayStart + endMinute * 60000),
-      minuteOfDay: minuteOfDay
-    };
-  }
-
-  getNextSwitches(now, count) {
-    if (!now) now = new Date();
-    if (!count) count = 5;
-    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60;
-    const out = [];
-    let day = 0;
-    let index = 0;
-    while (out.length < count) {
-      const absolute = day * 1440 + SWITCHES[index].minute;
-      if (absolute > minuteOfDay) {
-        out.push({
-          date: new Date(dayStart + absolute * 60000),
-          kind: SWITCHES[index].kind
-        });
-      }
-      index++;
-      if (index >= SWITCHES.length) {
-        index = 0;
-        day++;
-      }
-    }
-    return out;
-  }
-
-  getCurrentWindowStart(now) {
-    if (!now) now = new Date();
-    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60;
-    let best = null;
-    [-1, 0].forEach(function (day) {
-      SWITCHES.forEach(function (s) {
-        const absolute = day * 1440 + s.minute;
-        if (absolute <= minuteOfDay && (best === null || absolute > best)) {
-          best = absolute;
-        }
-      });
-    });
-    return new Date(dayStart + best * 60000);
-  }
-
-  getWindowList(now, count) {
-    if (!now) now = new Date();
-    if (!count) count = 4;
-    const upcoming = this.getNextSwitches(now, count);
-    let start = this.getCurrentWindowStart(now);
-    let kind = this.getCurrentUtcWindow(now).kind;
-    const out = [];
-    for (let i = 0; i < count; i++) {
-      out.push({
-        start: start,
-        end: upcoming[i].date,
-        kind: kind,
-        isPeak: kind === "peak",
-        current: i === 0
-      });
-      start = upcoming[i].date;
-      kind = upcoming[i].kind;
-    }
-    return out;
-  }
-
-  getDisplaySegments() {
-    const offset = this.getDisplayOffset();
-    const points = TRANSITIONS.map(function (t) {
-      return {
-        minute: ((t.minute + offset) % 1440 + 1440) % 1440,
-        kind: t.kind
-      };
-    });
-    points.sort(function (a, b) {
-      return a.minute - b.minute;
-    });
-
-    const raw = [];
-    if (points[0].minute > 0) {
-      raw.push({ start: 0, end: points[0].minute, kind: points[points.length - 1].kind });
-    }
-    points.forEach(function (point, i) {
-      const end = i + 1 < points.length ? points[i + 1].minute : 1440;
-      if (end > point.minute) {
-        raw.push({ start: point.minute, end: end, kind: point.kind });
-      }
-    });
-
-    const merged = [];
-    raw.forEach(function (segment) {
-      const last = merged[merged.length - 1];
-      if (last && last.kind === segment.kind) {
-        last.end = segment.end;
-      } else {
-        merged.push({ start: segment.start, end: segment.end, kind: segment.kind });
-      }
-    });
-    return merged;
-  }
+  constructor() { this.zone = 'local'; this.autoDetectedTimezone = this.detectLocalTimezone(); }
+  detectLocalTimezone() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local Time'; } catch (_) { return 'Local Time'; } }
+  setZone(zone) { if (['local', 'utc', 'beijing'].includes(zone)) this.zone = zone; }
+  getTimezoneName() { return this.zone === 'beijing' ? 'Asia/Shanghai' : (this.zone === 'utc' ? 'UTC' : this.autoDetectedTimezone); }
+  getDisplayOffset(now) { if (this.zone === 'utc') return 0; if (this.zone === 'beijing') return 480; return -(now || new Date()).getTimezoneOffset(); }
+  getGmtOffsetLabel(now) { const offset = this.getDisplayOffset(now); const sign = offset >= 0 ? '+' : '−'; const absolute = Math.abs(offset); return 'GMT' + sign + Math.floor(absolute / 60) + (absolute % 60 ? ':' + String(absolute % 60).padStart(2, '0') : ''); }
+  getFormatters() { const options = { hour: '2-digit', minute: '2-digit', hour12: false }; if (this.zone !== 'local') options.timeZone = this.getTimezoneName(); return { timeFmt: new Intl.DateTimeFormat(undefined, options), timeZoneFmt: new Intl.DateTimeFormat(undefined, Object.assign({}, options, { timeZoneName: 'short' })) }; }
+  formatClock(seconds) { const value = Math.max(0, Math.floor(seconds)); return [Math.floor(value / 3600), Math.floor(value / 60) % 60, value % 60].map((n) => String(n).padStart(2, '0')).join(':'); }
+  formatAwayLabel(milliseconds) { const minutes = Math.max(0, Math.floor(milliseconds / 60000)); return minutes >= 60 ? Math.floor(minutes / 60) + 'h ' + minutes % 60 + 'm' : minutes + 'm'; }
+  formatDurationLabel(milliseconds) { return this.formatAwayLabel(milliseconds).replace(' 0m', ''); }
+  isBeijingWeekend(now) { const beijing = new Date(now.getTime() + 480 * 60000); const day = beijing.getUTCDay(); return now.getTime() >= WEEKEND_OFF_PEAK_EFFECTIVE_AT && (day === 0 || day === 6); }
+  getRateKind(now) { const minute = now.getUTCHours() * 60 + now.getUTCMinutes(); return this.isBeijingWeekend(now) ? 'off' : ((minute >= 60 && minute < 240) || (minute >= 360 && minute < 600) ? 'peak' : 'off'); }
+  getSwitchesAround(now, direction, count) { const result = []; const day = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()); for (let offset = 0; result.length < count && offset < 14; offset += 1) { const date = new Date(day + direction * offset * 1440 * 60000); const candidates = direction > 0 ? SWITCHES : SWITCHES.slice().reverse(); candidates.forEach((sw) => { const candidate = new Date(date.getTime() + sw.minute * 60000); if ((direction > 0 ? candidate > now : candidate <= now) && this.getRateKind(candidate) !== this.getRateKind(new Date(candidate.getTime() - 1))) result.push({ date: candidate, kind: this.getRateKind(candidate) }); }); } return result.sort((a, b) => direction * (a.date - b.date)).slice(0, count); }
+  getCurrentUtcWindow(now) { now = now || new Date(); const kind = this.getRateKind(now); const next = this.getSwitchesAround(now, 1, 1)[0]; return { kind, isPeak: kind === 'peak', nextKind: next.kind, end: next.date, minuteOfDay: now.getUTCHours() * 60 + now.getUTCMinutes() }; }
+  // Keep the timeline marker on the same clock used to format the countdown.
+  getDisplayMinute(now) { now = now || new Date(); return (now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60 + now.getUTCMilliseconds() / 60000 + this.getDisplayOffset(now) + 1440) % 1440; }
+  getTimelinePosition(now) { return this.getDisplayMinute(now) / 1440 * 100; }
+  getNextSwitches(now, count) { return this.getSwitchesAround(now || new Date(), 1, count || 5); }
+  getWindowList(now, count) { now = now || new Date(); count = count || 4; const current = this.getCurrentUtcWindow(now); const previous = this.getSwitchesAround(now, -1, 1)[0]; let start = previous ? previous.date : now; let kind = current.kind; return [current.end].concat(this.getNextSwitches(current.end, count - 1).map((item) => item.date)).map((end, index) => { const window = { start, end, kind, current: index === 0 }; start = end; kind = kind === 'peak' ? 'off' : 'peak'; return window; }); }
+  getDisplaySegments(now) { now = now || new Date(); const displayMinute = this.getDisplayMinute(now); const displayDayStart = new Date(now.getTime() - displayMinute * 60000); const segments = []; let start = 0; let kind = this.getRateKind(displayDayStart); for (let minute = 1; minute <= 1440; minute += 1) { const nextKind = minute === 1440 ? null : this.getRateKind(new Date(displayDayStart.getTime() + minute * 60000)); if (nextKind !== kind) { segments.push({ start, end: minute, kind }); start = minute; kind = nextKind; } } return segments; }
+  getForecastSegments(now, durationMinutes) { now = now || new Date(); const end = new Date(now.getTime() + (durationMinutes || 1440) * 60000); const segments = []; let start = now; let kind = this.getRateKind(now); while (start < end) { const next = this.getSwitchesAround(start, 1, 1)[0]; const finish = next && next.date < end ? next.date : end; segments.push({ start: (start - now) / 60000, end: (finish - now) / 60000, kind }); if (finish.getTime() === end.getTime()) break; start = finish; kind = next.kind; } return segments; }
+  estimate(modelId, usage, kind) { const model = PRICING_CATALOGUE.models.find((item) => item.id === modelId) || PRICING_CATALOGUE.models[0]; const rateKind = kind || this.getCurrentUtcWindow().kind; const values = usage || {}; return (Number(values.cacheHit || 0) * model.cacheHit[rateKind] + Number(values.cacheMiss || 0) * model.cacheMiss[rateKind] + Number(values.output || 0) * model.output[rateKind]) / 1000000; }
 }
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = DeepSeekCalculator;
-}
+if (typeof module !== 'undefined' && module.exports) module.exports = { DeepSeekCalculator, PRICING_CATALOGUE, PRICING_SOURCE, CHANGELOG_SOURCE, PRICING_EFFECTIVE_AT, WEEKEND_OFF_PEAK_EFFECTIVE_AT };

@@ -1,6 +1,9 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, screen, safeStorage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const crypto = require('crypto');
+const { PRICING_CATALOGUE, DeepSeekCalculator } = require('./src/js/calculator.js');
 
 let mainWindow = null;
 let tray = null;
@@ -8,13 +11,16 @@ let isPinned = true;
 let currentMode = 'bar'; // 'expanded' | 'bar' | 'tray'
 let isQuitting = false;
 let isPeakNow = false;
+let usageProxy = null;
+const usageCalculator = new DeepSeekCalculator();
 
 const isLinux = process.platform === 'linux';
+const isWindows = process.platform === 'win32';
 const isWayland = isLinux && process.env.XDG_SESSION_TYPE === 'wayland';
 const appIconPath = path.join(__dirname, 'src', 'assets', 'icons', 'icon.png');
 
 const SIZES = {
-  expanded: { width: 360, height: 590, minWidth: 320, minHeight: 480 },
+  expanded: { width: 430, height: 680, minWidth: 360, minHeight: 540 },
   bar: { width: 230, height: 60, minWidth: 200, minHeight: 60 }
 };
 
@@ -36,6 +42,104 @@ function loadConfig() {
     autostart: false
   };
 }
+
+function getSecretPath() {
+  return path.join(app.getPath('userData'), 'deepseek-api-key.bin');
+}
+
+function saveApiKey(value) {
+  try {
+    if (!value) return false;
+    if (!safeStorage.isEncryptionAvailable()) return false;
+    const secret = safeStorage.encryptString(value);
+    fs.writeFileSync(getSecretPath(), secret, { mode: 0o600 });
+    return true;
+  } catch (error) { console.error('Could not store API key:', error); return false; }
+}
+
+function readApiKey() {
+  try {
+    const value = fs.readFileSync(getSecretPath());
+    return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(value) : '';
+  } catch (_) { return ''; }
+}
+
+function clearApiKey() { try { if (fs.existsSync(getSecretPath())) fs.unlinkSync(getSecretPath()); return true; } catch (_) { return false; } }
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try { return await fetch(url, Object.assign({}, options, { signal: controller.signal })); } finally { clearTimeout(timeout); }
+}
+
+function classifyUsageTime(timestamp) {
+  return usageCalculator.getCurrentUtcWindow(new Date(timestamp)).kind;
+}
+
+function costUsage(modelId, usage, kind) {
+  const model = PRICING_CATALOGUE.models.find((item) => item.id === modelId) || PRICING_CATALOGUE.models[0];
+  return ((usage.cacheHit * model.cacheHit[kind]) + (usage.cacheMiss * model.cacheMiss[kind]) + (usage.output * model.output[kind])) / 1000000;
+}
+
+function recordUsage(metadata) {
+  const current = loadConfig();
+  const at = metadata.at || new Date().toISOString();
+  const kind = classifyUsageTime(at);
+  const usage = {
+    at,
+    kind,
+    model: metadata.model || 'deepseek-v4-flash',
+    cacheHit: Number(metadata.cacheHit || 0),
+    cacheMiss: Number(metadata.cacheMiss || 0),
+    output: Number(metadata.output || 0)
+  };
+  usage.cost = costUsage(usage.model, usage, kind);
+  const entries = (Array.isArray(current.usage) ? current.usage : []).concat(usage).slice(-5000);
+  saveConfig({ usage: entries });
+  if (mainWindow) mainWindow.webContents.send('usage-recorded', usage);
+}
+
+function startUsageProxy() {
+  if (usageProxy) return { ok: true, port: usageProxy.address().port };
+  const config = loadConfig();
+  const key = readApiKey();
+  if (!key) return { ok: false, message: 'Save a DeepSeek API key before enabling the monitor.' };
+  const token = config.proxyToken || crypto.randomBytes(24).toString('base64url');
+  if (!config.proxyToken) saveConfig({ proxyToken: token });
+  usageProxy = http.createServer(async (request, response) => {
+    if (request.method !== 'POST' || !['/chat/completions', '/v1/chat/completions'].includes(request.url)) { response.writeHead(404); response.end('DeepSeek monitor endpoint: POST /v1/chat/completions'); return; }
+    if (request.headers.authorization !== 'Bearer ' + token) { response.writeHead(401); response.end('Unauthorized monitor token'); return; }
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('error', () => response.destroy());
+    request.on('end', async () => {
+      const body = Buffer.concat(chunks);
+      let payload;
+      try { payload = JSON.parse(body.toString('utf8')); } catch (_) { response.writeHead(400); response.end('Invalid JSON request body'); return; }
+      const requestedAt = new Date().toISOString();
+      try {
+        const upstream = await fetch('https://api.deepseek.com/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body });
+        const text = await upstream.text();
+        response.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('content-type') || 'application/json' });
+        response.end(text);
+        if (upstream.ok && !payload.stream) {
+          try {
+            const apiResponse = JSON.parse(text); const reported = apiResponse.usage || {};
+            const cacheHit = Number(reported.prompt_cache_hit_tokens || 0);
+            const prompt = Number(reported.prompt_tokens || 0);
+            recordUsage({ at: requestedAt, model: apiResponse.model || payload.model, cacheHit, cacheMiss: Number(reported.prompt_cache_miss_tokens || Math.max(0, prompt - cacheHit)), output: Number(reported.completion_tokens || 0) });
+          } catch (_) { /* A successful completion without a parseable usage object is simply not recorded. */ }
+        }
+      } catch (error) { response.writeHead(502); response.end(JSON.stringify({ error: { message: 'DeepSeek upstream error: ' + error.message } })); }
+    });
+  });
+  return new Promise((resolve) => {
+    usageProxy.once('error', (error) => { usageProxy = null; resolve({ ok: false, message: error.message }); });
+    usageProxy.listen(0, '127.0.0.1', () => resolve({ ok: true, port: usageProxy.address().port, token }));
+  });
+}
+
+function stopUsageProxy() { if (usageProxy) { usageProxy.close(); usageProxy = null; } }
 
 function saveConfig(updates) {
   try {
@@ -114,6 +218,13 @@ function setLinuxAutostart(enabled) {
   }
 }
 
+function setAutostart(enabled) {
+  if (isLinux) return setLinuxAutostart(enabled);
+  if (isWindows) {
+    try { app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: app.isPackaged ? [] : [app.getAppPath()] }); } catch (error) { console.error('Could not update Windows autostart:', error); }
+  }
+}
+
 function createWindow() {
   const config = loadConfig();
   isPinned = config.pinned !== undefined ? config.pinned : true;
@@ -160,6 +271,10 @@ function createWindow() {
   mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://api-docs.deepseek.com/')) shell.openExternal(url);
+    return { action: 'deny' };
+  });
 
   if (isPinned) {
     applyAlwaysOnTop(mainWindow, true);
@@ -220,12 +335,12 @@ function updateTrayMenu() {
         saveConfig({ pinned: isPinned });
       }
     },
-    ...(isLinux ? [{
+    ...((isLinux || isWindows) ? [{
       label: 'Start Automatically on Login',
       type: 'checkbox',
       checked: loadConfig().autostart === true,
       click: (item) => {
-        setLinuxAutostart(item.checked);
+        setAutostart(item.checked);
         saveConfig({ autostart: item.checked });
       }
     }] : []),
@@ -344,12 +459,12 @@ ipcMain.on('show-context-menu', () => {
         saveConfig({ pinned: isPinned });
       }
     },
-    ...(isLinux ? [{
+    ...((isLinux || isWindows) ? [{
       label: 'Start Automatically on Login',
       type: 'checkbox',
       checked: loadConfig().autostart === true,
       click: (item) => {
-        setLinuxAutostart(item.checked);
+        setAutostart(item.checked);
         saveConfig({ autostart: item.checked });
       }
     }] : []),
@@ -415,6 +530,40 @@ ipcMain.on('send-notification', (event, { title, body }) => {
   }
 });
 
+ipcMain.handle('save-api-key', (event, value) => ({ ok: saveApiKey(String(value || '')) }));
+ipcMain.handle('clear-api-key', () => ({ ok: clearApiKey() }));
+
+ipcMain.handle('verify-pricing', async () => {
+  const checkedAt = new Date().toISOString();
+  try {
+    const response = await fetchWithTimeout('https://api-docs.deepseek.com/quick_start/pricing/', { headers: { 'User-Agent': 'DeepSeekPriceClock/1.1' } });
+    const text = await response.text();
+    const expected = ['01:00 - 04:00', '06:00 - 10:00', '$0.007', '$3.96'];
+    const ok = response.ok && expected.every((value) => text.includes(value));
+    return { ok, checkedAt, source: 'https://api-docs.deepseek.com/quick_start/pricing/' };
+  } catch (error) { return { ok: false, checkedAt, message: error.message }; }
+});
+
+ipcMain.handle('get-balance', async () => {
+  const key = readApiKey();
+  if (!key) return { ok: false, message: safeStorage.isEncryptionAvailable() ? 'No API key stored.' : 'Secure credential storage is unavailable on this system.' };
+  try {
+    const response = await fetchWithTimeout('https://api.deepseek.com/user/balance', { headers: { Authorization: 'Bearer ' + key, Accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok) return { ok: false, message: payload.error?.message || 'Balance request failed (' + response.status + ').' };
+    const infos = Array.isArray(payload.balance_infos) ? payload.balance_infos : [];
+    const balance = infos.map((item) => (item.currency || 'USD') + ' ' + (item.total_balance || item.balance || '0')).join(' · ') || 'Available';
+    return { ok: true, balance };
+  } catch (error) { return { ok: false, message: 'Balance request failed: ' + error.message }; }
+});
+
+ipcMain.handle('start-usage-proxy', async () => startUsageProxy());
+ipcMain.handle('stop-usage-proxy', () => { stopUsageProxy(); return { ok: true }; });
+ipcMain.handle('get-usage-proxy-status', () => {
+  const config = loadConfig();
+  return usageProxy ? { running: true, port: usageProxy.address().port, token: config.proxyToken || '' } : { running: false };
+});
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -426,5 +575,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  stopUsageProxy();
   app.quit();
 });

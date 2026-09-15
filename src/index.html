@@ -1,127 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DeepSeek Price Clock</title>
-  <link rel="stylesheet" href="styles/main.css">
-</head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>DeepSeek Price Clock</title><link rel="stylesheet" href="styles/main.css"></head>
 <body data-mode="bar">
+  <main id="view-bar" class="view-container active drag-region" aria-label="DeepSeek price clock mini bar">
+    <div class="bar-header"><span class="bar-title">DeepSeek Price Clock</span><button class="bar-expand-btn no-drag" id="btn-bar-expand" aria-label="Open dashboard">↗</button></div>
+    <div class="bar-body"><div class="bar-left"><span class="bar-dot dot-off" id="bar-dot"></span><span class="bar-timer" id="bar-timer">--:--:--</span></div><span class="bar-tag tag-off" id="bar-status">OFF-PEAK</span></div>
+  </main>
 
-  <!-- 1. FLOATING MINI BAR (WITH HEADER & COUNTDOWN) -->
-  <div id="view-bar" class="view-container active drag-region" title="DeepSeek Peak Timer (Double-click or click [↗] to expand)">
-    <div class="bar-header">
-      <span class="bar-title">DeepSeek Peak Timer</span>
-      <button class="bar-expand-btn no-drag" id="btn-bar-expand" title="Expand to Full Dashboard">↗</button>
-    </div>
-    <div class="bar-body">
-      <div class="bar-left">
-        <span class="bar-dot dot-off" id="bar-dot"></span>
-        <span class="bar-timer" id="bar-timer">--:--:--</span>
-      </div>
-      <span class="bar-tag tag-off" id="bar-status">-50%</span>
-    </div>
-  </div>
+  <main id="view-expanded" class="view-container" aria-label="DeepSeek Price Clock dashboard">
+    <header class="window-header drag-region"><div class="brand-wrap"><span class="brand-icon" aria-hidden="true">◷</span><span class="brand-title">DeepSeek Price Clock</span></div><div class="header-controls no-drag"><button class="ctrl-btn active" id="btn-pin" aria-label="Toggle always on top">📌</button><button class="ctrl-btn" id="btn-minimize-bar" aria-label="Minimize to mini bar">—</button><button class="ctrl-btn" id="btn-minimize-tray" aria-label="Hide to system tray">⌄</button><button class="ctrl-btn close" id="btn-close" aria-label="Exit application">✕</button></div></header>
+    <nav class="tabs no-drag" aria-label="Dashboard sections"><button class="tab active" data-tab="clock">Clock</button><button class="tab" data-tab="calculator">Calculator</button><button class="tab" data-tab="usage">Usage</button><button class="tab" data-tab="settings">Settings</button></nav>
+    <section class="dashboard-content tab-panel active" data-panel="clock">
+      <div class="hero-card hero-off" id="hero-status"><div class="badge-row"><span class="status-dot dot-off" id="badge-dot"></span><span class="badge-text" id="badge-text" aria-live="polite">OFF-PEAK · 50% OFF</span></div><div class="timer-row"><span class="count-timer" id="count-timer">--:--:--</span><span class="count-suffix" id="count-suffix">until peak pricing</span></div><div class="next-prompt" id="next-prompt">Calculating transition…</div></div>
+      <div class="timeline-section"><div class="section-label"><span>Next 24-hour schedule</span><span id="tz-label">Local time</span></div><div class="timeline-track-wrap"><div class="timeline-track" id="timeline-track"></div><div class="timeline-needle" id="timeline-needle"></div></div><div class="timeline-ticks" id="timeline-ticks" aria-label="Upcoming pricing change times"></div><div class="timeline-legend" aria-label="Schedule colour legend"><span><i class="legend-swatch legend-off"></i>Off-peak</span><span><i class="legend-swatch legend-peak"></i>Peak</span></div><p class="schedule-note">Weekdays: peak 01:00–04:00 and 06:00–10:00 UTC. Weekends (Beijing time): off-peak all day.</p></div>
+      <div class="windows-section"><div class="section-label"><span>Upcoming price windows</span><span id="best-window"></span></div><table class="windows-table"><tbody id="windows-table-body"></tbody></table></div>
+      <div class="rates-section"><div class="section-label"><span id="rates-status-header">Current off-peak rates</span><a class="source-link no-drag" href="https://api-docs.deepseek.com/quick_start/pricing/" target="_blank" rel="noreferrer">Official source ↗</a></div><div id="rates-grid" class="rates-grid"></div><p class="rate-unit-note">USD per 1M tokens · <span id="catalogue-status">Bundled catalogue</span></p></div>
+    </section>
 
-  <!-- 2. FULL EXPANDED DASHBOARD -->
-  <div id="view-expanded" class="view-container">
-    <!-- Header / Drag Bar -->
-    <div class="window-header drag-region">
-      <div class="brand-wrap">
-        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-        </svg>
-        <span class="brand-title">DeepSeek Clock</span>
-      </div>
-      <div class="header-controls no-drag">
-        <button class="ctrl-btn active" id="btn-pin" title="Always on Top (Pinned)">📌</button>
-        <button class="ctrl-btn" id="btn-minimize-bar" title="Minimize to Floating Bar">—</button>
-        <button class="ctrl-btn" id="btn-minimize-tray" title="Minimize / Hide to System Tray">⌄</button>
-        <button class="ctrl-btn close" id="btn-close" title="Exit DeepSeek Clock">✕</button>
-      </div>
-    </div>
+    <section class="dashboard-content tab-panel" data-panel="calculator">
+      <div class="section-intro"><h2>Cost calculator</h2><p>Compare the same workload at peak and off-peak prices.</p></div>
+      <form id="calculator-form" class="form-card no-drag">
+        <label>Model<select id="calc-model"></select></label><label>Cache-hit input tokens<input id="calc-cache-hit" type="number" min="0" value="0" inputmode="numeric"></label><label>Cache-miss input tokens<input id="calc-cache-miss" type="number" min="0" value="1000000" inputmode="numeric"></label><label>Output tokens<input id="calc-output" type="number" min="0" value="100000" inputmode="numeric"></label><label>Requests<input id="calc-requests" type="number" min="1" value="1" inputmode="numeric"></label>
+      </form>
+      <div class="estimate-grid"><div><span>Off-peak</span><strong id="estimate-off">$0.00</strong></div><div><span>Peak</span><strong id="estimate-peak">$0.00</strong></div><div class="estimate-saving"><span>Schedule savings</span><strong id="estimate-saving">$0.00</strong></div></div>
+      <p class="tip-card" id="cache-tip">Cache-hit input is billed at a lower rate. Reuse stable prompt prefixes where practical.</p>
+    </section>
 
-    <!-- Scrollable Body -->
-    <div class="dashboard-content">
-      <!-- Hero Status Card -->
-      <div class="hero-card hero-off" id="hero-status">
-        <div class="badge-row">
-          <span class="status-dot dot-off" id="badge-dot"></span>
-          <span class="badge-text" id="badge-text">OFF-PEAK · 50% DISCOUNT</span>
-        </div>
-        <div class="timer-row">
-          <span class="count-timer" id="count-timer">--:--:--</span>
-          <span class="count-suffix">left</span>
-        </div>
-        <div class="next-prompt" id="next-prompt">→ Calculating switchover...</div>
-      </div>
+    <section class="dashboard-content tab-panel" data-panel="usage">
+      <div class="section-intro"><h2>Usage & budget</h2><p>Private local estimates; API access is optional.</p></div>
+      <div class="usage-grid"><div class="metric"><span>Off-peak cost</span><strong id="usage-off">$0.00</strong></div><div class="metric"><span>Peak cost</span><strong id="usage-peak">$0.00</strong></div><div class="metric"><span>Off-peak ratio</span><strong id="usage-ratio">—</strong></div><div class="metric"><span>Today</span><strong id="usage-today">$0.00</strong></div><div class="metric"><span>This month</span><strong id="usage-month">$0.00</strong></div><div class="metric"><span>Budget remaining</span><strong id="usage-budget">—</strong></div></div>
+      <div class="monitor-card"><div><strong>API-driven usage monitor</strong><p id="monitor-status">Off. Start it to proxy non-streaming Chat Completions and measure peak/off-peak token usage.</p><code id="monitor-endpoint" hidden></code></div><div class="button-row"><button id="start-monitor" class="no-drag" type="button">Start monitor</button><button id="stop-monitor" class="secondary no-drag" type="button">Stop</button></div></div>
+      <div class="form-card no-drag"><label>Monthly budget (USD)<input id="monthly-budget" type="number" min="0" step="0.01" placeholder="Optional"></label><label>Import usage JSON<input id="usage-import" type="file" accept="application/json"></label><button id="export-usage" type="button">Export local usage</button><button id="clear-usage" type="button" class="secondary">Clear local usage</button></div>
+      <div class="balance-card"><div><strong>Optional balance check</strong><p id="balance-status">No API key stored.</p></div><button id="refresh-balance" class="no-drag" type="button">Check balance</button></div>
+      <p class="tip-card">Usage can be imported from compatible local logs. Keys are encrypted by Electron where the operating system supports it.</p>
+    </section>
 
-      <!-- 24-Hour Timeline Bar -->
-      <div class="timeline-section">
-        <div class="section-label">
-          <span>24-Hour Schedule</span>
-          <span id="tz-label">Local Time</span>
-        </div>
-        <div class="timeline-track-wrap">
-          <div class="timeline-track" id="timeline-track"></div>
-          <div class="timeline-needle" id="timeline-needle"></div>
-        </div>
-        <div class="timeline-ticks">
-          <span>00:00</span>
-          <span>06:00</span>
-          <span>12:00</span>
-          <span>18:00</span>
-          <span>24:00</span>
-        </div>
-      </div>
-
-      <!-- Upcoming Windows Table -->
-      <div class="windows-section">
-        <div class="section-label">Upcoming Price Windows</div>
-        <table class="windows-table">
-          <tbody id="windows-table-body">
-            <!-- Dynamically populated -->
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Real-Time Model Pricing -->
-      <div class="rates-section">
-        <div class="section-label" id="rates-status-header">Paying Now · Off-Peak Rates</div>
-        <div class="rates-grid">
-          <!-- DeepSeek Flash -->
-          <div class="rate-box">
-            <div class="model-name">DeepSeek Flash</div>
-            <div class="rate-pair">
-              <div class="rate-col"><span>Input</span><span class="rate-val" data-off="$0.22" data-peak="$0.44">$0.22</span></div>
-              <div class="rate-col"><span>Output</span><span class="rate-val" data-off="$0.66" data-peak="$1.32">$0.66</span></div>
-            </div>
-          </div>
-          <!-- DeepSeek Pro -->
-          <div class="rate-box">
-            <div class="model-name">DeepSeek Pro</div>
-            <div class="rate-pair">
-              <div class="rate-col"><span>Input</span><span class="rate-val" data-off="$0.66" data-peak="$1.32">$0.66</span></div>
-              <div class="rate-col"><span>Output</span><span class="rate-val" data-off="$1.98" data-peak="$3.96">$1.98</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="rate-unit-note">Per 1M tokens.</div>
-      </div>
-    </div>
-
-    <!-- Footer Toolbar -->
-    <div class="footer-toolbar no-drag">
-      <span class="tz-info" id="tz-footer-info">Auto Timezone</span>
-      <div class="tz-toggle">
-        <button type="button" class="tz-btn active" data-zone="local">Local</button>
-        <button type="button" class="tz-btn" data-zone="utc">UTC</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/calculator.js"></script>
-  <script src="js/app.js"></script>
-</body>
-</html>
+    <section class="dashboard-content tab-panel" data-panel="settings">
+      <div class="section-intro"><h2>Preferences</h2><p>Clock, notifications, privacy, and data health.</p></div>
+      <div class="form-card no-drag"><label>Timezone<select id="setting-zone"><option value="local">Local time</option><option value="utc">UTC</option><option value="beijing">Beijing (UTC+8)</option></select></label><label>Alert lead time<select id="alert-lead"><option value="0">No advance alert</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label><label>Quiet hours start (local)<input id="quiet-start" type="time"></label><label>Quiet hours end (local)<input id="quiet-end" type="time"></label><label class="check"><input id="notify-peak" type="checkbox"> Alert when peak starts</label><label class="check"><input id="notify-off" type="checkbox"> Alert when off-peak starts</label><label>DeepSeek API key <input id="api-key" type="password" autocomplete="off" placeholder="Optional; stored securely"></label><div class="button-row"><button id="save-settings" type="button">Save preferences</button><button id="clear-key" type="button" class="secondary">Remove API key</button></div></div>
+      <div class="health-card"><span class="status-dot dot-off" id="health-dot"></span><div><strong>Pricing data health</strong><p id="pricing-health">Checking bundled catalogue…</p></div><button id="refresh-pricing" class="no-drag" type="button">Verify source</button></div>
+      <div class="notification-history"><div class="section-label">Recent alerts</div><ul id="notification-history"></ul></div>
+    </section>
+    <footer class="footer-toolbar no-drag"><span class="tz-info" id="tz-footer-info">Local timezone</span><div class="tz-toggle"><button class="tz-btn active" data-zone="local">Local</button><button class="tz-btn" data-zone="utc">UTC</button><button class="tz-btn" data-zone="beijing">BJ</button></div></footer>
+  </main>
+  <script src="js/calculator.js"></script><script src="js/app.js"></script>
+</body></html>
